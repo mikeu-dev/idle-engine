@@ -198,3 +198,15 @@ func (b *Business) GetProgress() time.Duration {
 	return b.Progress
 }
 
+// SetAutomated mengubah status otomatisasi bisnis secara thread-safe.
+func (b *Business) SetAutomated(automated bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.IsAutomated = automated
+	// Jika status diubah menjadi otomatis dan level > 0, langsung jalankan produksi
+	if b.IsAutomated && b.Level > 0 && !b.IsActive {
+		b.IsActive = true
+		b.Progress = 0
+	}
+}
+
