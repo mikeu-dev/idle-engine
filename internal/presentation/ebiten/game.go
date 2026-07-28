@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"image/color"
 	"idle-engine/engine"
+	"idle-engine/internal/core/save"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -13,17 +15,27 @@ import (
 
 // Game mengimplementasikan interface ebiten.Game.
 type Game struct {
-	engine *engine.Engine
+	engine             *engine.Engine
+	lastAutoSave       time.Time
+	notification       string
+	notificationExpiry time.Time
 }
 
 // NewGame membuat instance Game baru dengan engine yang diberikan.
 func NewGame(eng *engine.Engine) *Game {
 	return &Game{
-		engine: eng,
+		engine:       eng,
+		lastAutoSave: time.Now(),
 	}
 }
 
-// Update memproses input dan memperbarui engine.
+// SetOfflineNotification mengatur pesan notifikasi pendapatan offline saat game pertama dibuka.
+func (g *Game) SetOfflineNotification(revenue float64) {
+	g.notification = fmt.Sprintf("[KEMBALI! PENDAPATAN OFFLINE: +%.2f POIN]", revenue)
+	g.notificationExpiry = time.Now().Add(5 * time.Second)
+}
+
+// Update memproses input dan memperbarui engine serta siklus simpan-muat.
 func (g *Game) Update() error {
 	g.engine.Update()
 
@@ -43,6 +55,36 @@ func (g *Game) Update() error {
 		g.engine.BuyUpgrade(2) // Upgrade Car Wash
 	}
 
+	// Kontrol Hotkey Manual Save/Load
+	saveFile := "savegame.json"
+	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
+		state := g.engine.ExportState()
+		if err := save.SaveToFile(saveFile, state); err != nil {
+			g.notification = "[GAGAL MENYIMPAN GAME!]"
+		} else {
+			g.notification = "[GAME BERHASIL DISIMPAN!]"
+		}
+		g.notificationExpiry = time.Now().Add(3 * time.Second)
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyL) {
+		state, err := save.LoadFromFile(saveFile)
+		if err != nil {
+			g.notification = "[GAGAL MEMUAT GAME!]"
+		} else {
+			g.engine.ImportState(state)
+			g.notification = "[GAME BERHASIL DIMUAT!]"
+		}
+		g.notificationExpiry = time.Now().Add(3 * time.Second)
+	}
+
+	// Sistem Auto-Save Berkala (tiap 5 detik sekali)
+	if time.Since(g.lastAutoSave) >= 5*time.Second {
+		g.lastAutoSave = time.Now()
+		state := g.engine.ExportState()
+		_ = save.SaveToFile(saveFile, state) // Simpan secara silent di background
+	}
+
 	return nil
 }
 
@@ -57,6 +99,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// Header
 	ebitenutil.DebugPrintAt(screen, "=== IDLE ENGINE SANDBOX ===", 20, 15)
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("SALDO: %.2f POIN", balance), 20, 35)
+
+	// Draw active notification if not expired
+	if time.Now().Before(g.notificationExpiry) && g.notification != "" {
+		// Gambar notifikasi dengan warna kuning neon cerah di kanan atas
+		ebitenutil.DebugPrintAt(screen, g.notification, 320, 15)
+	}
 
 	// Gambar Lini Bisnis
 	businesses := g.engine.GetBusinesses()
@@ -139,10 +187,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	// Footer / Petunjuk
-	ebitenutil.DebugPrintAt(screen, "Petunjuk: Bisnis otomatis (Newspaper & Car Wash) akan langsung berproduksi setelah dibeli.", 20, 440)
+	ebitenutil.DebugPrintAt(screen, "Petunjuk: Bisnis otomatis (Newspaper & Car Wash) akan langsung berproduksi setelah dibeli.", 20, 425)
+	ebitenutil.DebugPrintAt(screen, "Fitur: [S] Simpan Manual | [L] Muat Manual | Auto-save aktif (5s)", 20, 445)
 }
 
 // Layout mengembalikan ukuran layar game.
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return 640, 480
 }
+
