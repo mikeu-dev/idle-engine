@@ -26,6 +26,7 @@ type Engine struct {
 	achievements     []*event.Achievement
 	lifetimeEarnings float64
 	angels           int
+	boostDuration    time.Duration
 	lastTick         time.Time
 }
 
@@ -115,6 +116,7 @@ func NewEngineWithConfig(cfgPath string) *Engine {
 		achievements:     achievements,
 		lifetimeEarnings: 4.0,
 		angels:           0,
+		boostDuration:    0,
 		lastTick:         time.Now(),
 	}
 }
@@ -132,6 +134,15 @@ func (e *Engine) Update() {
 	now := time.Now()
 	delta := now.Sub(e.lastTick)
 	e.lastTick = now
+
+	// Update sisa durasi Super Boost
+	if e.boostDuration > 0 {
+		e.boostDuration -= delta
+		if e.boostDuration <= 0 {
+			e.boostDuration = 0
+			e.applyModifiers() // Hitung ulang modifiers karena boost habis
+		}
+	}
 
 	// Update masing-masing bisnis dan tampung pendapatan
 	totalRevenue := 0.0
@@ -196,6 +207,54 @@ func (e *Engine) GetAngels() int {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.angels
+}
+
+// GetBoostDuration mengembalikan sisa durasi Super Boost secara thread-safe.
+func (e *Engine) GetBoostDuration() time.Duration {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.boostDuration
+}
+
+// TriggerSuperBoost mengaktifkan Super Boost selama 30 detik dengan memotong biaya saldo.
+func (e *Engine) TriggerSuperBoost() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	cost := 50.0
+	if e.wallet.Spend(cost) {
+		e.boostDuration += 30 * time.Second
+		e.applyModifiers() // Hitung ulang kecepatan bisnis dengan booster
+		return true
+	}
+	return false
+}
+
+// TriggerTimeWarp memberikan pendapatan instan 1 jam dengan memotong biaya saldo.
+func (e *Engine) TriggerTimeWarp() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	cost := 150.0
+	if e.wallet.Spend(cost) {
+		// Hitung total GPS dari bisnis otomatis yang dimiliki pemain saat ini
+		totalGPS := 0.0
+		for _, b := range e.businesses {
+			if b.IsOwned() && b.IsAutomated {
+				totalGPS += b.GetGPS()
+			}
+		}
+
+		// Instan dapatkan 1 jam pendapatan (3600 detik)
+		instantRevenue := totalGPS * 3600.0
+		if instantRevenue > 0 {
+			e.wallet.Add(instantRevenue)
+			e.lifetimeEarnings += instantRevenue
+			e.checkAchievements()
+		}
+		return true
+	}
+	return false
 }
 
 // CalculateAngelsToClaim menghitung berapa banyak investor yang bisa diperoleh jika mereset progres sekarang.
@@ -403,9 +462,15 @@ func (e *Engine) applyModifiers() {
 		}
 	}
 
+	// 4. Terapkan Super Boost (2x Kecepatan Global jika durasi > 0)
+	boostMult := 1.0
+	if e.boostDuration > 0 {
+		boostMult = 2.0
+	}
+
 	// Terapkan ke masing-masing bisnis
 	for _, b := range e.businesses {
-		b.SetModifiers(revMults[b.ID], speedMults[b.ID])
+		b.SetModifiers(revMults[b.ID], speedMults[b.ID]*boostMult)
 	}
 }
 
@@ -502,6 +567,7 @@ func (e *Engine) ExportState() *save.SaveState {
 		Achievements:     unlockedAchievements,
 		LifetimeEarnings: e.lifetimeEarnings,
 		Angels:           e.angels,
+		BoostDurationNs:  int64(e.boostDuration),
 		Timestamp:        time.Now(),
 	}
 }
@@ -561,6 +627,7 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 		e.lifetimeEarnings = e.wallet.Balance()
 	}
 	e.angels = state.Angels
+	e.boostDuration = time.Duration(state.BoostDurationNs)
 
 	// 7. Hitung ulang modifiers
 	e.applyModifiers()

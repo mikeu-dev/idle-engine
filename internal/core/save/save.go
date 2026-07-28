@@ -23,6 +23,7 @@ type SaveState struct {
 	Achievements     []string   `json:"achievements"`
 	LifetimeEarnings float64    `json:"lifetime_earnings"`
 	Angels           int        `json:"angels"`
+	BoostDurationNs  int64      `json:"boost_duration_ns"`
 	Timestamp        time.Time  `json:"timestamp"`
 }
 
