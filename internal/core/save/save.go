@@ -16,10 +16,12 @@ type BizState struct {
 
 // SaveState adalah struktur data utama untuk file penyimpanan game (JSON).
 type SaveState struct {
-	Balance    float64    `json:"balance"`
-	Businesses []BizState `json:"businesses"`
-	Upgrades   []string   `json:"upgrades"`
-	Timestamp  time.Time  `json:"timestamp"`
+	Balance      float64    `json:"balance"`
+	Businesses   []BizState `json:"businesses"`
+	Upgrades     []string   `json:"upgrades"`
+	Managers     []string   `json:"managers"`
+	Achievements []string   `json:"achievements"`
+	Timestamp    time.Time  `json:"timestamp"`
 }
 
 // SaveToFile menulis data SaveState ke file lokal dalam format JSON.
