@@ -21,6 +21,11 @@ jobs:
         go-version: '1.22'
         cache: true
 
+    - name: Install Ebitengine dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libc6-dev libgl1-mesa-dev libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev libasound2-dev pkg-config
+
     - name: Install dependencies
       run: go mod download
 
