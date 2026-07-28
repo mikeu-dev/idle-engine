@@ -22,6 +22,18 @@ type FloatingText struct {
 	createdAt time.Time
 }
 
+// UITheme mendefinisikan palet warna terintegrasi untuk tampilan game.
+type UITheme struct {
+	Name      string
+	BgColor   color.RGBA
+	CardBg    color.RGBA
+	Blue      color.RGBA
+	Green     color.RGBA
+	Yellow    color.RGBA
+	Pink      color.RGBA
+	Orange    color.RGBA
+}
+
 // Game mengimplementasikan interface ebiten.Game.
 type Game struct {
 	engine                *engine.Engine
@@ -34,15 +46,52 @@ type Game struct {
 	buyMaxMode            bool
 	prevProgress          []time.Duration
 	floatingTexts         []FloatingText
+	activeThemeIndex      int
+	themes                []UITheme
 }
 
 // NewGame membuat instance Game baru dengan engine yang diberikan.
 func NewGame(eng *engine.Engine) *Game {
+	themes := []UITheme{
+		{
+			Name:    "Catppuccin Mocha",
+			BgColor: color.RGBA{R: 30, G: 30, B: 46, A: 255},
+			CardBg:  color.RGBA{R: 45, G: 45, B: 60, A: 255},
+			Blue:    color.RGBA{R: 137, G: 180, B: 250, A: 255},
+			Green:   color.RGBA{R: 166, G: 227, B: 161, A: 255},
+			Yellow:  color.RGBA{R: 249, G: 226, B: 175, A: 255},
+			Pink:    color.RGBA{R: 245, G: 194, B: 231, A: 255},
+			Orange:  color.RGBA{R: 250, G: 179, B: 135, A: 255},
+		},
+		{
+			Name:    "Cyberpunk Neon",
+			BgColor: color.RGBA{R: 10, G: 10, B: 20, A: 255},
+			CardBg:  color.RGBA{R: 25, G: 15, B: 35, A: 255},
+			Blue:    color.RGBA{R: 0, G: 240, B: 255, A: 255},
+			Green:   color.RGBA{R: 57, G: 255, B: 20, A: 255},
+			Yellow:  color.RGBA{R: 255, G: 255, B: 51, A: 255},
+			Pink:    color.RGBA{R: 255, G: 0, B: 127, A: 255},
+			Orange:  color.RGBA{R: 255, G: 110, B: 0, A: 255},
+		},
+		{
+			Name:    "Nordic Frost",
+			BgColor: color.RGBA{R: 46, G: 52, B: 64, A: 255},
+			CardBg:  color.RGBA{R: 59, G: 66, B: 82, A: 255},
+			Blue:    color.RGBA{R: 136, G: 192, B: 208, A: 255},
+			Green:   color.RGBA{R: 163, G: 190, B: 140, A: 255},
+			Yellow:  color.RGBA{R: 235, G: 203, B: 139, A: 255},
+			Pink:    color.RGBA{R: 180, G: 142, B: 173, A: 255},
+			Orange:  color.RGBA{R: 208, G: 135, B: 112, A: 255},
+		},
+	}
+
 	return &Game{
-		engine:       eng,
-		lastAutoSave: time.Now(),
-		activeTab:    0,
-		buyMaxMode:   false,
+		engine:           eng,
+		lastAutoSave:     time.Now(),
+		activeTab:        0,
+		buyMaxMode:       false,
+		themes:           themes,
+		activeThemeIndex: 0,
 	}
 }
 
@@ -69,6 +118,13 @@ func (g *Game) Update() error {
 		} else {
 			g.notification = "[MODE UPGRADE: BELI 1x]"
 		}
+		g.notificationExpiry = time.Now().Add(2 * time.Second)
+	}
+
+	// Toggle Tema Warna UI dengan T (Berlaku Global)
+	if inpututil.IsKeyJustPressed(ebiten.KeyT) {
+		g.activeThemeIndex = (g.activeThemeIndex + 1) % len(g.themes)
+		g.notification = fmt.Sprintf("[TEMA WARNA UI AKTIF: %s]", g.themes[g.activeThemeIndex].Name)
 		g.notificationExpiry = time.Now().Add(2 * time.Second)
 	}
 
@@ -320,8 +376,10 @@ func (g *Game) showTabChangeNotification() {
 
 // Draw menggambar representasi visual game ke layar.
 func (g *Game) Draw(screen *ebiten.Image) {
-	// Background color (Slate dark)
-	screen.Fill(color.RGBA{R: 30, G: 30, B: 46, A: 255})
+	theme := g.themes[g.activeThemeIndex]
+
+	// Background color dinamis sesuai tema aktif
+	screen.Fill(theme.BgColor)
 
 	wallet := g.engine.GetWallet()
 	balance := wallet.Balance()
@@ -348,18 +406,18 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		ebitenutil.DebugPrintAt(screen, g.notification, 320, 12)
 	}
 
-	// Gambar Tab Header (5 Tab UI)
+	// Gambar Tab Header (5 Tab UI) dengan warna dinamis sesuai tema aktif
 	tabs := []struct {
 		tabIdx int
 		title  string
 		hotkey string
 		color  color.RGBA
 	}{
-		{0, " BISNIS", "F1", color.RGBA{R: 137, G: 180, B: 250, A: 255}}, // Blue
-		{1, "UPGRADE", "F2", color.RGBA{R: 166, G: 227, B: 161, A: 255}}, // Green
-		{2, "MANAGER", "F3", color.RGBA{R: 249, G: 226, B: 175, A: 255}}, // Yellow
-		{3, "ACHIEVE", "F4", color.RGBA{R: 245, G: 194, B: 231, A: 255}}, // Pink/Lavender
-		{4, "INVESTOR", "F5", color.RGBA{R: 250, G: 179, B: 135, A: 255}}, // Orange
+		{0, " BISNIS", "F1", theme.Blue},
+		{1, "UPGRADE", "F2", theme.Green},
+		{2, "MANAGER", "F3", theme.Yellow},
+		{3, "ACHIEVE", "F4", theme.Pink},
+		{4, "INVESTOR", "F5", theme.Orange},
 	}
 
 	for i, t := range tabs {
@@ -370,7 +428,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			bg = t.color
 			txt = fmt.Sprintf("*%s*", t.title)
 		} else {
-			bg = color.RGBA{R: 45, G: 45, B: 60, A: 255}
+			bg = theme.CardBg
 			txt = fmt.Sprintf("[%s]%s", t.hotkey, t.title)
 		}
 		vector.DrawFilledRect(screen, float32(x), 50, 84, 22, bg, false)
@@ -453,17 +511,17 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			barW := 600
 			barH := 12
 
-			// Background Progress Bar (grayish-blue)
-			vector.DrawFilledRect(screen, float32(barX), float32(barY), float32(barW), float32(barH), color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+			// Background Progress Bar (grayish-blue) dari tema aktif
+			vector.DrawFilledRect(screen, float32(barX), float32(barY), float32(barW), float32(barH), theme.CardBg, false)
 
 			// Fill Progress Bar
 			pct := b.GetProgressPercent()
 			if pct > 0 {
 				var barColor color.RGBA
 				if b.IsAutomated {
-					barColor = color.RGBA{R: 166, G: 227, B: 161, A: 255} // Pastel Green
+					barColor = theme.Green
 				} else {
-					barColor = color.RGBA{R: 137, G: 180, B: 250, A: 255} // Pastel Blue
+					barColor = theme.Blue
 				}
 				vector.DrawFilledRect(screen, float32(barX), float32(barY), float32(float64(barW)*pct), float32(barH), barColor, false)
 			}
@@ -479,8 +537,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		for i, upg := range upgrades {
 			y := 88 + i*108
 
-			// Draw card background (box lebar 380)
-			vector.DrawFilledRect(screen, 20, float32(y), 380, 95, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+			// Draw card background (box lebar 380) dari tema aktif
+			vector.DrawFilledRect(screen, 20, float32(y), 380, 95, theme.CardBg, false)
 
 			titleText := fmt.Sprintf("[%d] %s", i+1, upg.Name)
 			if upg.IsPurchased {
@@ -509,7 +567,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		ebitenutil.DebugPrintAt(screen, "=== TOKO BOOSTER SEMENTARA ===", 420, 88)
 
 		// Kartu Super Boost (y=110)
-		vector.DrawFilledRect(screen, 420, 110, 200, 100, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		vector.DrawFilledRect(screen, 420, 110, 200, 100, theme.CardBg, false)
 		ebitenutil.DebugPrintAt(screen, "[U] SUPER BOOST", 435, 120)
 		ebitenutil.DebugPrintAt(screen, "2x Kecepatan (30s)", 435, 140)
 		ebitenutil.DebugPrintAt(screen, "Biaya: 50.00 Poin", 435, 160)
@@ -520,7 +578,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		ebitenutil.DebugPrintAt(screen, boostStatus, 435, 180)
 
 		// Kartu Time Warp (y=230)
-		vector.DrawFilledRect(screen, 420, 230, 200, 100, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		vector.DrawFilledRect(screen, 420, 230, 200, 100, theme.CardBg, false)
 		ebitenutil.DebugPrintAt(screen, "[I] TIME WARP", 435, 240)
 		ebitenutil.DebugPrintAt(screen, "Instan +1 Jam Otomatis", 435, 260)
 		ebitenutil.DebugPrintAt(screen, "Biaya: 150.00 Poin", 435, 280)
@@ -537,8 +595,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		for i, m := range managers {
 			y := 88 + i*108
 
-			// Draw card background (box)
-			vector.DrawFilledRect(screen, 20, float32(y), 600, 95, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+			// Draw card background (box) dari tema aktif
+			vector.DrawFilledRect(screen, 20, float32(y), 600, 95, theme.CardBg, false)
 
 			titleText := fmt.Sprintf("[%d] %s", i+1, m.Name)
 			if m.IsHired {
@@ -570,12 +628,17 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		for i, ach := range achievements {
 			y := 88 + i*108
 
-			// Draw card background (box)
+			// Draw card background (box) dari tema aktif
 			var boxColor color.RGBA
 			if ach.IsUnlocked {
-				boxColor = color.RGBA{R: 50, G: 70, B: 60, A: 255} // Light green tint box for unlocked
+				boxColor = color.RGBA{
+					R: uint8(float64(theme.Green.R)*0.4 + float64(theme.CardBg.R)*0.6),
+					G: uint8(float64(theme.Green.G)*0.4 + float64(theme.CardBg.G)*0.6),
+					B: uint8(float64(theme.Green.B)*0.4 + float64(theme.CardBg.B)*0.6),
+					A: 255,
+				}
 			} else {
-				boxColor = color.RGBA{R: 45, G: 45, B: 60, A: 255} // Dark gray box for locked
+				boxColor = theme.CardBg
 			}
 			vector.DrawFilledRect(screen, 20, float32(y), 600, 95, boxColor, false)
 
@@ -606,15 +669,15 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		angels := g.engine.GetAngels()
 		claimable := g.engine.CalculateAngelsToClaim()
 
-		// 1. Statistik Card
-		vector.DrawFilledRect(screen, 20, 88, 600, 110, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		// 1. Statistik Card dari tema aktif
+		vector.DrawFilledRect(screen, 20, 88, 600, 110, theme.CardBg, false)
 		ebitenutil.DebugPrintAt(screen, "STATISTIK SEPANJANG MASA (LIFETIME STATS):", 35, 98)
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Total Akumulasi Pendapatan : %.2f Poin", lifetime), 35, 120)
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Angel Investors Dimiliki  : %d Investor", angels), 35, 142)
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Bonus Pengali Pendapatan  : +%d%% Pendapatan (Global)", angels*5), 35, 164)
 
-		// 2. Prestige Card
-		vector.DrawFilledRect(screen, 20, 218, 600, 130, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		// 2. Prestige Card dari tema aktif
+		vector.DrawFilledRect(screen, 20, 218, 600, 130, theme.CardBg, false)
 		ebitenutil.DebugPrintAt(screen, "RESET PRESTIS (INVESTASI MALAIKAT):", 35, 228)
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Investor Baru untuk Diklaim : +%d Investor", claimable), 35, 250)
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Efek Bonus Setelah Klaim    : +%d%% Pendapatan (Global)", (angels+claimable)*5), 35, 272)
