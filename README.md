@@ -87,6 +87,7 @@ Anda dapat beralih halaman tab menggunakan tombol **`[Tab]`** pada keyboard seca
 
 ### 6. Fitur Global
 * **Event Acak**: Berita ekonomi berjalan otomatis dipicu setiap 45 detik untuk memodifikasi multiplier performa bisnis secara dinamis.
+* **`[T]`**: Mengubah tema palet warna visual UI (Catppuccin Mocha, Cyberpunk Neon, Nordic Frost) secara instan.
 * **`[S]`**: Menyimpan progres game secara manual ke `savegame.json` (terenkripsi XOR, mencakup sisa durasi boost).
 * **`[L]`**: Memuat progres game secara manual dari `savegame.json` (mendukung decoding lama & baru).
 * *Auto-save berjalan di background setiap 5 detik.*
