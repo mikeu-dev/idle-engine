@@ -25,3 +25,6 @@ Thumbs.db
 db.json
 Desktop.ini
 .DS_Store
+
+# Local save game file
+savegame.json
