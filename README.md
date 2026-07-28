@@ -92,3 +92,8 @@ You can cycle through pages using the **`[Tab]`** key, or switch directly to a t
 * **`[L]`**: Load progress manually from `savegame.json` (supports both legacy plain JSON and encrypted formats).
 * *Auto-save runs in the background every 5 seconds.*
 
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](file:///c:/Users/dev%20perusahaan%20pst/workspaces/mikeu-dev/idle-engine/LICENSE) file for details.
