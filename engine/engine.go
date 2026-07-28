@@ -8,6 +8,7 @@ import (
 	"idle-engine/internal/domain/manager"
 	"idle-engine/internal/domain/modifier"
 	"idle-engine/internal/domain/upgrade"
+	"idle-engine/internal/infrastructure/config"
 	"math"
 	"sync"
 	"time"
@@ -26,38 +27,82 @@ type Engine struct {
 	lastTick         time.Time
 }
 
-// NewEngine membuat instance Engine baru dengan setup bisnis awal, upgrade, manager, dan achievement.
-func NewEngine() *Engine {
+// NewEngineWithConfig membuat instance Engine baru berdasarkan berkas konfigurasi YAML di cfgPath.
+// Jika file tidak dapat dibaca atau di-decode, engine akan menggunakan konfigurasi fallback bawaan agar unit test tetap kompatibel.
+func NewEngineWithConfig(cfgPath string) *Engine {
 	// Buat wallet dengan modal awal 4 poin agar bisa beli Lemonade Stand segera
 	wallet := economy.NewWallet(4.0)
 
-	// Setup beberapa lini bisnis
-	businesses := []*business.Business{
-		// Bisnis 1: Murah, cepat, manual awalnya
-		business.NewBusiness("lemonade", "Lemonade Stand", 4.0, 1.15, 1.0, 1*time.Second, false),
-		// Bisnis 2: Sedang, otomatis
-		business.NewBusiness("newspaper", "Newspaper Route", 20.0, 1.15, 4.0, 3*time.Second, true),
-		// Bisnis 3: Mahal, lambat, otomatis, hasil besar
-		business.NewBusiness("carwash", "Car Wash", 100.0, 1.15, 20.0, 6*time.Second, true),
-	}
+	var businesses []*business.Business
+	var upgrades []*upgrade.Upgrade
+	var managers []*manager.Manager
+	var achievements []*event.Achievement
 
-	// Setup item upgrade bawaan
-	upgrades := []*upgrade.Upgrade{
-		upgrade.NewUpgrade("lemon_pitcher", "Lemon Pitcher", "Lemonade Stand 2x Pendapatan", 15.0, "lemonade", modifier.NewModifier(2.0, 1.0)),
-		upgrade.NewUpgrade("newspaper_bag", "Newspaper Bag", "Newspaper Route 2x Kecepatan", 50.0, "newspaper", modifier.NewModifier(1.0, 2.0)),
-		upgrade.NewUpgrade("power_washer", "Power Washer", "Car Wash 3x Pendapatan", 250.0, "carwash", modifier.NewModifier(3.0, 1.0)),
-	}
+	// Coba muat konfigurasi dari file
+	cfg, err := config.LoadConfig(cfgPath)
+	if err == nil && len(cfg.Businesses) > 0 {
+		// Konfigurasi dinamis dari YAML
+		for _, bc := range cfg.Businesses {
+			duration := time.Duration(bc.DurationMs) * time.Millisecond
+			b := business.NewBusiness(bc.ID, bc.Name, bc.BaseCost, bc.CostMultiplier, bc.BaseIncome, duration, bc.IsAutomated)
+			businesses = append(businesses, b)
+		}
 
-	// Setup item manager otomatisasi bawaan (柠檬 stand manual, lainnya sudah otomatis bawaan)
-	managers := []*manager.Manager{
-		manager.NewManager("lemonade_mgr", "Lemonade Manager", "Mengotomatiskan Lemonade Stand secara permanen", 100.0, "lemonade"),
-	}
+		for _, uc := range cfg.Upgrades {
+			upgrades = append(upgrades, upgrade.NewUpgrade(
+				uc.ID,
+				uc.Name,
+				uc.Description,
+				uc.Cost,
+				uc.TargetBusinessID,
+				modifier.NewModifier(uc.RevenueMultiplier, uc.SpeedMultiplier),
+			))
+		}
 
-	// Setup pencapaian (Achievements) bawaan
-	achievements := []*event.Achievement{
-		event.NewAchievement("pts_100", "Poin Pemula", "Kumpulkan 100 Poin (Bonus +10% pendapatan global)", "balance", "", 100.0, 0.10),
-		event.NewAchievement("lemon_10", "Lemonade Tycoon", "Lemonade Stand Level 10 (Bonus +20% pendapatan Lemonade)", "level", "lemonade", 10.0, 0.20),
-		event.NewAchievement("news_10", "Newspaper Tycoon", "Newspaper Route Level 10 (Bonus +20% pendapatan Newspaper)", "level", "newspaper", 10.0, 0.20),
+		for _, mc := range cfg.Managers {
+			managers = append(managers, manager.NewManager(
+				mc.ID,
+				mc.Name,
+				mc.Description,
+				mc.Cost,
+				mc.TargetBusinessID,
+			))
+		}
+
+		for _, ac := range cfg.Achievements {
+			achievements = append(achievements, event.NewAchievement(
+				ac.ID,
+				ac.Name,
+				ac.Description,
+				ac.ConditionType,
+				ac.TargetBusinessID,
+				ac.TargetValue,
+				ac.BonusMultiplier,
+			))
+		}
+	} else {
+		// Fallback bawaan (hardcoded) demi kompatibilitas mundur
+		businesses = []*business.Business{
+			business.NewBusiness("lemonade", "Lemonade Stand", 4.0, 1.15, 1.0, 1*time.Second, false),
+			business.NewBusiness("newspaper", "Newspaper Route", 20.0, 1.15, 4.0, 3*time.Second, true),
+			business.NewBusiness("carwash", "Car Wash", 100.0, 1.15, 20.0, 6*time.Second, true),
+		}
+
+		upgrades = []*upgrade.Upgrade{
+			upgrade.NewUpgrade("lemon_pitcher", "Lemon Pitcher", "Lemonade Stand 2x Pendapatan", 15.0, "lemonade", modifier.NewModifier(2.0, 1.0)),
+			upgrade.NewUpgrade("newspaper_bag", "Newspaper Bag", "Newspaper Route 2x Kecepatan", 50.0, "newspaper", modifier.NewModifier(1.0, 2.0)),
+			upgrade.NewUpgrade("power_washer", "Power Washer", "Car Wash 3x Pendapatan", 250.0, "carwash", modifier.NewModifier(3.0, 1.0)),
+		}
+
+		managers = []*manager.Manager{
+			manager.NewManager("lemonade_mgr", "Lemonade Manager", "Mengotomatiskan Lemonade Stand secara permanen", 100.0, "lemonade"),
+		}
+
+		achievements = []*event.Achievement{
+			event.NewAchievement("pts_100", "Poin Pemula", "Kumpulkan 100 Poin (Bonus +10% pendapatan global)", "balance", "", 100.0, 0.10),
+			event.NewAchievement("lemon_10", "Lemonade Tycoon", "Lemonade Stand Level 10 (Bonus +20% pendapatan Lemonade)", "level", "lemonade", 10.0, 0.20),
+			event.NewAchievement("news_10", "Newspaper Tycoon", "Newspaper Route Level 10 (Bonus +20% pendapatan Newspaper)", "level", "newspaper", 10.0, 0.20),
+		}
 	}
 
 	return &Engine{
@@ -66,10 +111,15 @@ func NewEngine() *Engine {
 		upgrades:         upgrades,
 		managers:         managers,
 		achievements:     achievements,
-		lifetimeEarnings: 4.0, // Modal awal dihitung ke lifetime
+		lifetimeEarnings: 4.0,
 		angels:           0,
 		lastTick:         time.Now(),
 	}
+}
+
+// NewEngine membuat instance Engine baru dengan konfigurasi bawaan game_config.yaml.
+func NewEngine() *Engine {
+	return NewEngineWithConfig("internal/infrastructure/config/game_config.yaml")
 }
 
 // Update memproses waktu yang berlalu dan memperbarui semua bisnis serta saldo wallet.
