@@ -10,6 +10,7 @@ import (
 	"idle-engine/internal/domain/modifier"
 	"idle-engine/internal/domain/upgrade"
 	"idle-engine/internal/infrastructure/config"
+	"idle-engine/pkg/mathutil"
 	"math"
 	"sync"
 	"time"
@@ -283,6 +284,31 @@ func (e *Engine) BuyUpgrade(idx int) bool {
 	// Coba belanjakan uang dari wallet
 	if e.wallet.Spend(cost) {
 		b.Upgrade()
+		e.checkAchievements() // Periksa pencapaian setelah level bisnis berubah
+		return true
+	}
+	return false
+}
+
+// BuyUpgradeMax membeli level bisnis sebanyak mungkin (Buy Max) berdasarkan saldo yang tersedia.
+func (e *Engine) BuyUpgradeMax(idx int) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if idx < 0 || idx >= len(e.businesses) {
+		return false
+	}
+
+	b := e.businesses[idx]
+	balance := e.wallet.Balance()
+
+	levels, cost := mathutil.CalculateMaxLevelsAffordable(b.BaseCost, b.CostMultiplier, b.GetLevel(), balance)
+	if levels <= 0 {
+		return false
+	}
+
+	if e.wallet.Spend(cost) {
+		b.UpgradeMany(levels)
 		e.checkAchievements() // Periksa pencapaian setelah level bisnis berubah
 		return true
 	}
@@ -586,6 +612,20 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 
 	return offlineRevenue
 }
+
+// GetTotalGPS mengembalikan total pendapatan per detik dari seluruh bisnis otomatis yang dimiliki pemain.
+func (e *Engine) GetTotalGPS() float64 {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	total := 0.0
+	for _, b := range e.businesses {
+		if b.IsOwned() && b.IsAutomated {
+			total += b.GetGPS()
+		}
+	}
+	return total
+}
+
 
 
 
