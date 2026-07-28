@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"idle-engine/engine"
 	"idle-engine/internal/core/save"
+	"idle-engine/pkg/mathutil"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -12,6 +13,14 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
+
+// FloatingText merepresentasikan teks mengambang kecil di layar.
+type FloatingText struct {
+	x, y      float32
+	text      string
+	alpha     float32
+	createdAt time.Time
+}
 
 // Game mengimplementasikan interface ebiten.Game.
 type Game struct {
@@ -22,6 +31,9 @@ type Game struct {
 	activeTab             int // 0: Bisnis, 1: Upgrade, 2: Manager, 3: Achievements, 4: Investor
 	prestigeConfirm       bool
 	prestigeConfirmExpiry time.Time
+	buyMaxMode            bool
+	prevProgress          []time.Duration
+	floatingTexts         []FloatingText
 }
 
 // NewGame membuat instance Game baru dengan engine yang diberikan.
@@ -30,6 +42,7 @@ func NewGame(eng *engine.Engine) *Game {
 		engine:       eng,
 		lastAutoSave: time.Now(),
 		activeTab:    0,
+		buyMaxMode:   false,
 	}
 }
 
@@ -46,6 +59,47 @@ func (g *Game) Update() error {
 	// Reset prestige confirm state jika sudah kedaluwarsa
 	if g.prestigeConfirm && time.Now().After(g.prestigeConfirmExpiry) {
 		g.prestigeConfirm = false
+	}
+
+	// Toggle Mode Beli dengan M (Berlaku Global)
+	if inpututil.IsKeyJustPressed(ebiten.KeyM) {
+		g.buyMaxMode = !g.buyMaxMode
+		if g.buyMaxMode {
+			g.notification = "[MODE UPGRADE: BELI MAKSIMAL (MAX)]"
+		} else {
+			g.notification = "[MODE UPGRADE: BELI 1x]"
+		}
+		g.notificationExpiry = time.Now().Add(2 * time.Second)
+	}
+
+	// Update Floating Texts
+	var activeTexts []FloatingText
+	now := time.Now()
+	for _, ft := range g.floatingTexts {
+		age := now.Sub(ft.createdAt)
+		if age < 800*time.Millisecond {
+			ft.y -= 0.6
+			ft.alpha = 1.0 - float32(age.Milliseconds())/800.0
+			activeTexts = append(activeTexts, ft)
+		}
+	}
+	g.floatingTexts = activeTexts
+
+	// Deteksi Penyelesaian Siklus Bisnis untuk Floating Text
+	businesses := g.engine.GetBusinesses()
+	if len(g.prevProgress) != len(businesses) {
+		g.prevProgress = make([]time.Duration, len(businesses))
+		for i, b := range businesses {
+			g.prevProgress[i] = b.GetProgress()
+		}
+	}
+	for i, b := range businesses {
+		currProg := b.GetProgress()
+		if b.IsOwned() && currProg < g.prevProgress[i] {
+			yPos := float32(88 + i*112 + 58)
+			g.spawnFloatingText(550, yPos, fmt.Sprintf("+%.2f Poin", b.Income()))
+		}
+		g.prevProgress[i] = currProg
 	}
 
 	// Navigasi perpindahan tab menggunakan tombol TAB
@@ -82,13 +136,25 @@ func (g *Game) Update() error {
 			g.engine.TriggerProduction(0)
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyQ) {
-			g.engine.BuyUpgrade(0)
+			if g.buyMaxMode {
+				g.engine.BuyUpgradeMax(0)
+			} else {
+				g.engine.BuyUpgrade(0)
+			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyW) {
-			g.engine.BuyUpgrade(1)
+			if g.buyMaxMode {
+				g.engine.BuyUpgradeMax(1)
+			} else {
+				g.engine.BuyUpgrade(1)
+			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyE) {
-			g.engine.BuyUpgrade(2)
+			if g.buyMaxMode {
+				g.engine.BuyUpgradeMax(2)
+			} else {
+				g.engine.BuyUpgrade(2)
+			}
 		}
 	}
 
@@ -198,6 +264,16 @@ func (g *Game) Update() error {
 	return nil
 }
 
+func (g *Game) spawnFloatingText(x, y float32, text string) {
+	g.floatingTexts = append(g.floatingTexts, FloatingText{
+		x:         x,
+		y:         y,
+		text:      text,
+		alpha:     1.0,
+		createdAt: time.Now(),
+	})
+}
+
 func (g *Game) showTabChangeNotification() {
 	tabName := map[int]string{
 		0: "LIS LINI BISNIS",
@@ -220,7 +296,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// Header
 	ebitenutil.DebugPrintAt(screen, "=== IDLE ENGINE SANDBOX ===", 20, 12)
-	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("SALDO: %.2f POIN", balance), 20, 30)
+	gpsStr := fmt.Sprintf("SALDO: %.2f POIN (+%.2f/dtk)", balance, g.engine.GetTotalGPS())
+	ebitenutil.DebugPrintAt(screen, gpsStr, 20, 30)
+
+	modeStr := "MODE BELI: [1x] (Tekan [M] untuk Maks)"
+	if g.buyMaxMode {
+		modeStr = "MODE BELI: [MAKS] (Tekan [M] untuk 1x)"
+	}
+	ebitenutil.DebugPrintAt(screen, modeStr, 340, 30)
 
 	// Draw active notification if not expired
 	if time.Now().Before(g.notificationExpiry) && g.notification != "" {
@@ -303,15 +386,24 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			}
 
 			if b.IsOwned() {
-				detailText = fmt.Sprintf("Penghasilan: %.2f Poin / %s", b.Income(), b.Duration)
+				detailText = fmt.Sprintf("Penghasilan: %.2f Poin / %s (+%.2f/dtk)", b.Income(), b.Duration, b.GetGPS())
 			} else {
 				detailText = fmt.Sprintf("Penghasilan Awal: %.2f Poin / %s", b.BaseIncome, b.Duration)
 			}
 
-			if b.IsAutomated {
-				actionText = fmt.Sprintf("Upgrade: Tekan [%s] (Biaya: %.2f) [%s] (Otomatis)", keyName, cost, costColor)
+			if g.buyMaxMode {
+				levels, totalCost := mathutil.CalculateMaxLevelsAffordable(b.BaseCost, b.CostMultiplier, b.GetLevel(), balance)
+				if levels > 0 {
+					actionText = fmt.Sprintf("Beli Maks: Tekan [%s] (Dapat +%d Level, Biaya: %.2f) [Bisa Beli]", keyName, levels, totalCost)
+				} else {
+					actionText = fmt.Sprintf("Beli Maks: Tekan [%s] (Biaya: %.2f) [Saldo Kurang]", keyName, cost)
+				}
 			} else {
-				actionText = fmt.Sprintf("Upgrade: Tekan [%s] (Biaya: %.2f) [%s] | Mulai: Tekan [%d]", keyName, cost, costColor, i+1)
+				if b.IsAutomated {
+					actionText = fmt.Sprintf("Upgrade: Tekan [%s] (Biaya: %.2f) [%s] (Otomatis)", keyName, cost, costColor)
+				} else {
+					actionText = fmt.Sprintf("Upgrade: Tekan [%s] (Biaya: %.2f) [%s] | Mulai: Tekan [%d]", keyName, cost, costColor, i+1)
+				}
 			}
 
 			ebitenutil.DebugPrintAt(screen, detailText, 20, y+20)
@@ -480,6 +572,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// Footer (Global)
 	ebitenutil.DebugPrintAt(screen, "Fitur: [S] Simpan Manual | [L] Muat Manual | Auto-save aktif (5s)", 20, 445)
+
+	// Render Floating Texts
+	for _, ft := range g.floatingTexts {
+		ebitenutil.DebugPrintAt(screen, ft.text, int(ft.x), int(ft.y))
+	}
 }
 
 // Layout mengembalikan ukuran layar game.
