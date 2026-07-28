@@ -3,6 +3,7 @@ package engine
 import (
 	"idle-engine/internal/core/event"
 	"idle-engine/internal/core/save"
+	gametime "idle-engine/internal/core/time"
 	"idle-engine/internal/domain/business"
 	"idle-engine/internal/domain/economy"
 	"idle-engine/internal/domain/manager"
@@ -479,7 +480,7 @@ func (e *Engine) ExportState() *save.SaveState {
 	}
 }
 
-// ImportState memuat state penyimpanan ke dalam engine dan menghitung pendapatan offline.
+// ImportState memuat state penyimpanan ke dalam engine dan menghitung pendapatan offline dengan proteksi NTP anti-cheat.
 // Mengembalikan total pendapatan offline yang berhasil dikumpulkan (maksimal 12 jam offline).
 func (e *Engine) ImportState(state *save.SaveState) float64 {
 	e.mu.Lock()
@@ -538,9 +539,31 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 	// 7. Hitung ulang modifiers
 	e.applyModifiers()
 
-	// 8. Hitung pendapatan offline (maksimal 12 jam)
+	// 8. Hitung pendapatan offline (maksimal 12 jam) dengan proteksi anti-cheat
 	now := time.Now()
 	offlineDuration := now.Sub(state.Timestamp)
+
+	// Proteksi 1: Gunakan NTP jika terhubung
+	ntpTime, ntpErr := gametime.GetNetworkTime("pool.ntp.org", 1500*time.Millisecond)
+	if ntpErr == nil {
+		// Validasi apakah waktu lokal akurat (toleransi 5 menit)
+		isLocalValid := gametime.IsSystemTimeValid(now, ntpTime, 5*time.Minute)
+		if !isLocalValid {
+			// Jam lokal diubah secara tidak akurat/manipulatif, paksa gunakan selisih NTP tepercaya!
+			offlineDuration = ntpTime.Sub(state.Timestamp)
+		}
+
+		// Validasi apakah waktu NTP berada sebelum waktu simpan terakhir (cheat jam dimundurkan)
+		if ntpTime.Before(state.Timestamp) {
+			offlineDuration = 0
+		}
+	} else {
+		// Offline fallback ke waktu lokal
+		// Proteksi 2: Deteksi jika waktu lokal dimundurkan ke belakang waktu simpan terakhir
+		if now.Before(state.Timestamp) {
+			offlineDuration = 0
+		}
+	}
 
 	maxOffline := 12 * time.Hour
 	if offlineDuration > maxOffline {
