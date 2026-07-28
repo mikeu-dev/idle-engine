@@ -182,6 +182,38 @@ func (g *Game) Update() error {
 				g.notificationExpiry = time.Now().Add(2 * time.Second)
 			}
 		}
+
+		// Pemicu Booster Sementara
+		if inpututil.IsKeyJustPressed(ebiten.KeyU) {
+			if g.engine.TriggerSuperBoost() {
+				g.notification = "[SUPER BOOST DIAKTIFKAN: KECEPATAN 2X!]"
+				g.notificationExpiry = time.Now().Add(2 * time.Second)
+			} else {
+				g.notification = "[GAGAL AKTIFKAN SUPER BOOST (BUTUH 50 POIN)]"
+				g.notificationExpiry = time.Now().Add(2 * time.Second)
+			}
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+			if g.engine.TriggerTimeWarp() {
+				g.notification = "[TIME WARP BERHASIL: INSTAN +1 JAM PENDAPATAN PASIF!]"
+				g.notificationExpiry = time.Now().Add(3 * time.Second)
+			} else {
+				hasAuto := false
+				for _, b := range g.engine.GetBusinesses() {
+					if b.IsOwned() && b.IsAutomated {
+						hasAuto = true
+						break
+					}
+				}
+				if !hasAuto {
+					g.notification = "[GAGAL: TIME WARP MEMBUTUHKAN MINIMAL 1 BISNIS OTOMATIS]"
+				} else {
+					g.notification = "[GAGAL TIME WARP (BUTUH 150 POIN)]"
+				}
+				g.notificationExpiry = time.Now().Add(3 * time.Second)
+			}
+		}
 	}
 
 	// Kontrol Hotkey Tab Manager (activeTab == 2)
@@ -296,7 +328,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// Header
 	ebitenutil.DebugPrintAt(screen, "=== IDLE ENGINE SANDBOX ===", 20, 12)
-	gpsStr := fmt.Sprintf("SALDO: %.2f POIN (+%.2f/dtk)", balance, g.engine.GetTotalGPS())
+	boostDur := g.engine.GetBoostDuration()
+	var gpsStr string
+	if boostDur > 0 {
+		gpsStr = fmt.Sprintf("SALDO: %.2f POIN (+%.2f/dtk) [BOOST: %.1fs]", balance, g.engine.GetTotalGPS(), boostDur.Seconds())
+	} else {
+		gpsStr = fmt.Sprintf("SALDO: %.2f POIN (+%.2f/dtk)", balance, g.engine.GetTotalGPS())
+	}
 	ebitenutil.DebugPrintAt(screen, gpsStr, 20, 30)
 
 	modeStr := "MODE BELI: [1x] (Tekan [M] untuk Maks)"
@@ -464,7 +502,30 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			ebitenutil.DebugPrintAt(screen, actionText, 35, y+55)
 		}
 
-		ebitenutil.DebugPrintAt(screen, "Petunjuk: Peningkatan memodifikasi pendapatan atau kecepatan produksi lini bisnis terkait.", 20, 422)
+		// Toko Booster Sementara
+		ebitenutil.DebugPrintAt(screen, "=== TOKO BOOSTER SEMENTARA ===", 20, 415)
+
+		// 1. Kartu Super Boost
+		vector.DrawFilledRect(screen, 20, 435, 290, 80, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		ebitenutil.DebugPrintAt(screen, "[U] SUPER BOOST", 35, 445)
+		ebitenutil.DebugPrintAt(screen, "2x Kecepatan (30s)", 35, 465)
+		boostCostAfford := "Bisa Beli"
+		if !wallet.CanAfford(50.0) {
+			boostCostAfford = "Saldo Kurang"
+		}
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Biaya: 50.00 Poin (%s)", boostCostAfford), 35, 485)
+
+		// 2. Kartu Time Warp
+		vector.DrawFilledRect(screen, 330, 435, 290, 80, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		ebitenutil.DebugPrintAt(screen, "[I] TIME WARP", 345, 445)
+		ebitenutil.DebugPrintAt(screen, "Instan +1 Jam Otomatis", 345, 465)
+		warpCostAfford := "Bisa Beli"
+		if !wallet.CanAfford(150.0) {
+			warpCostAfford = "Saldo Kurang"
+		}
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Biaya: 150.00 Poin (%s)", warpCostAfford), 345, 485)
+
+		ebitenutil.DebugPrintAt(screen, "Petunjuk: Peningkatan memodifikasi multiplier permanen. Booster memberikan efek aktif sementara.", 20, 525)
 	}
 
 	// TAB 3: MANAGER
