@@ -349,10 +349,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		for i, b := range businesses {
 			y := 88 + i*112
 
-			// Judul Bisnis & Level
+			// Judul Bisnis & Level dengan Target Milestones Kecepatan
 			var statusText string
 			if b.IsOwned() {
-				statusText = fmt.Sprintf("Lv. %d", b.GetLevel())
+				statusText = fmt.Sprintf("Lv. %d/%d (Akselerasi 2x)", b.GetLevel(), b.GetNextMilestone())
 			} else {
 				statusText = "Belum Dimiliki"
 			}
