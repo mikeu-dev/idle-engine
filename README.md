@@ -76,6 +76,8 @@ Anda dapat beralih halaman tab menggunakan tombol **`[Tab]`** pada keyboard seca
 * **`[1]` / `[Q]`**: Membeli **Lemon Pitcher** (2x Pendapatan Lemonade Stand).
 * **`[2]` / `[W]`**: Membeli **Newspaper Bag** (2x Kecepatan Newspaper Route).
 * **`[3]` / `[E]`**: Membeli **Power Washer** (3x Pendapatan Car Wash).
+* **`[U]`** (Super Boost): Membeli Super Boost (2x Kecepatan selama 30 detik, biaya 50 Poin).
+* **`[I]`** (Time Warp): Membeli Time Warp (Instan +1 jam pendapatan pasif otomatis, biaya 150 Poin).
 
 ### 4. Aksi di Tab Manajer (`[F3]`)
 * **`[1]` / `[Q]`**: Mempekerjakan **Lemonade Manager** untuk mengotomatiskan produksi Lemonade Stand secara permanen.
@@ -84,7 +86,8 @@ Anda dapat beralih halaman tab menggunakan tombol **`[Tab]`** pada keyboard seca
 * **`[R]`** (Tekan Dua Kali): Tekan tombol `[R]` sebanyak **dua kali** dalam selang waktu 4 detik untuk mereset seluruh progres level bisnis, saldo, upgrade, dan manajer Anda demi mendapatkan **Angel Investors** baru.
 
 ### 6. Fitur Global
-* **`[S]`**: Menyimpan progres game secara manual ke `savegame.json` (terenkripsi XOR).
+* **Event Acak**: Berita ekonomi berjalan otomatis dipicu setiap 45 detik untuk memodifikasi multiplier performa bisnis secara dinamis.
+* **`[S]`**: Menyimpan progres game secara manual ke `savegame.json` (terenkripsi XOR, mencakup sisa durasi boost).
 * **`[L]`**: Memuat progres game secara manual dari `savegame.json` (mendukung decoding lama & baru).
 * *Auto-save berjalan di background setiap 5 detik.*
 
