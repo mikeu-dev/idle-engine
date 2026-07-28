@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"idle-engine/internal/core/save"
 	"idle-engine/internal/domain/business"
 	"idle-engine/internal/domain/economy"
 	"sync"
@@ -103,4 +104,74 @@ func (e *Engine) TriggerProduction(idx int) bool {
 
 	return e.businesses[idx].StartProduction()
 }
+
+// ExportState mengekspor state engine saat ini ke dalam bentuk SaveState.
+func (e *Engine) ExportState() *save.SaveState {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	bizStates := make([]save.BizState, len(e.businesses))
+	for i, b := range e.businesses {
+		bizStates[i] = save.BizState{
+			ID:         b.ID,
+			Level:      b.GetLevel(),
+			IsActive:   b.GetIsActive(),
+			ProgressNs: b.GetProgress(),
+		}
+	}
+
+	return &save.SaveState{
+		Balance:    e.wallet.Balance(),
+		Businesses: bizStates,
+		Timestamp:  time.Now(),
+	}
+}
+
+// ImportState memuat state penyimpanan ke dalam engine dan menghitung pendapatan offline.
+// Mengembalikan total pendapatan offline yang berhasil dikumpulkan (maksimal 12 jam offline).
+func (e *Engine) ImportState(state *save.SaveState) float64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	// 1. Pulihkan saldo wallet
+	e.wallet = economy.NewWallet(state.Balance)
+
+	// 2. Pulihkan state bisnis
+	bizStateMap := make(map[string]save.BizState)
+	for _, bs := range state.Businesses {
+		bizStateMap[bs.ID] = bs
+	}
+
+	for _, b := range e.businesses {
+		if bs, ok := bizStateMap[b.ID]; ok {
+			b.LoadState(bs.Level, bs.IsActive, bs.ProgressNs)
+		}
+	}
+
+	// 3. Hitung pendapatan offline (maksimal 12 jam)
+	now := time.Now()
+	offlineDuration := now.Sub(state.Timestamp)
+
+	maxOffline := 12 * time.Hour
+	if offlineDuration > maxOffline {
+		offlineDuration = maxOffline
+	}
+
+	offlineRevenue := 0.0
+	if offlineDuration > 0 {
+		for _, b := range e.businesses {
+			offlineRevenue += b.Update(offlineDuration)
+		}
+	}
+
+	if offlineRevenue > 0 {
+		e.wallet.Add(offlineRevenue)
+	}
+
+	// Reset lastTick ke waktu sekarang agar tidak mendobel durasi offline pada update frame berikutnya
+	e.lastTick = now
+
+	return offlineRevenue
+}
+
 
