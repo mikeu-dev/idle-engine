@@ -14,7 +14,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
-// FloatingText merepresentasikan teks mengambang kecil di layar.
+// FloatingText represents a small floating text on the screen.
 type FloatingText struct {
 	x, y      float32
 	text      string
@@ -22,7 +22,7 @@ type FloatingText struct {
 	createdAt time.Time
 }
 
-// UITheme mendefinisikan palet warna terintegrasi untuk tampilan game.
+// UITheme defines an integrated color palette for the game interface.
 type UITheme struct {
 	Name      string
 	BgColor   color.RGBA
@@ -34,13 +34,13 @@ type UITheme struct {
 	Orange    color.RGBA
 }
 
-// Game mengimplementasikan interface ebiten.Game.
+// Game implements the ebiten.Game interface.
 type Game struct {
 	engine                *engine.Engine
 	lastAutoSave          time.Time
 	notification          string
 	notificationExpiry    time.Time
-	activeTab             int // 0: Bisnis, 1: Upgrade, 2: Manager, 3: Achievements, 4: Investor
+	activeTab             int // 0: Business, 1: Upgrade, 2: Manager, 3: Achievements, 4: Investor
 	prestigeConfirm       bool
 	prestigeConfirmExpiry time.Time
 	buyMaxMode            bool
@@ -50,7 +50,7 @@ type Game struct {
 	themes                []UITheme
 }
 
-// NewGame membuat instance Game baru dengan engine yang diberikan.
+// NewGame creates a new Game instance with the given engine.
 func NewGame(eng *engine.Engine) *Game {
 	themes := []UITheme{
 		{
@@ -95,36 +95,36 @@ func NewGame(eng *engine.Engine) *Game {
 	}
 }
 
-// SetOfflineNotification mengatur pesan notifikasi pendapatan offline saat game pertama dibuka.
+// SetOfflineNotification sets the offline revenue notification message when the game is first opened.
 func (g *Game) SetOfflineNotification(revenue float64) {
-	g.notification = fmt.Sprintf("[KEMBALI! PENDAPATAN OFFLINE: +%.2f POIN]", revenue)
+	g.notification = fmt.Sprintf("[WELCOME BACK! OFFLINE REVENUE: +%.2f POINTS]", revenue)
 	g.notificationExpiry = time.Now().Add(5 * time.Second)
 }
 
-// Update memproses input dan memperbarui engine serta siklus simpan-muat.
+// Update processes input and updates the engine and the save-load cycle.
 func (g *Game) Update() error {
 	g.engine.Update()
 
-	// Reset prestige confirm state jika sudah kedaluwarsa
+	// Reset prestige confirm state if expired
 	if g.prestigeConfirm && time.Now().After(g.prestigeConfirmExpiry) {
 		g.prestigeConfirm = false
 	}
 
-	// Toggle Mode Beli dengan M (Berlaku Global)
+	// Toggle Buy Mode with M (Global)
 	if inpututil.IsKeyJustPressed(ebiten.KeyM) {
 		g.buyMaxMode = !g.buyMaxMode
 		if g.buyMaxMode {
-			g.notification = "[MODE UPGRADE: BELI MAKSIMAL (MAX)]"
+			g.notification = "[UPGRADE MODE: BUY MAX (MAX)]"
 		} else {
-			g.notification = "[MODE UPGRADE: BELI 1x]"
+			g.notification = "[UPGRADE MODE: BUY 1x]"
 		}
 		g.notificationExpiry = time.Now().Add(2 * time.Second)
 	}
 
-	// Toggle Tema Warna UI dengan T (Berlaku Global)
+	// Toggle UI Color Theme with T (Global)
 	if inpututil.IsKeyJustPressed(ebiten.KeyT) {
 		g.activeThemeIndex = (g.activeThemeIndex + 1) % len(g.themes)
-		g.notification = fmt.Sprintf("[TEMA WARNA UI AKTIF: %s]", g.themes[g.activeThemeIndex].Name)
+		g.notification = fmt.Sprintf("[UI COLOR THEME ACTIVE: %s]", g.themes[g.activeThemeIndex].Name)
 		g.notificationExpiry = time.Now().Add(2 * time.Second)
 	}
 
@@ -141,7 +141,7 @@ func (g *Game) Update() error {
 	}
 	g.floatingTexts = activeTexts
 
-	// Deteksi Penyelesaian Siklus Bisnis untuk Floating Text
+	// Detect Business Cycle Completion for Floating Text
 	businesses := g.engine.GetBusinesses()
 	if len(g.prevProgress) != len(businesses) {
 		g.prevProgress = make([]time.Duration, len(businesses))
@@ -153,18 +153,18 @@ func (g *Game) Update() error {
 		currProg := b.GetProgress()
 		if b.IsOwned() && currProg < g.prevProgress[i] {
 			yPos := float32(88 + i*112 + 58)
-			g.spawnFloatingText(550, yPos, fmt.Sprintf("+%.2f Poin", b.Income()))
+			g.spawnFloatingText(550, yPos, fmt.Sprintf("+%.2f Points", b.Income()))
 		}
 		g.prevProgress[i] = currProg
 	}
 
-	// Navigasi perpindahan tab menggunakan tombol TAB
+	// Cycle tabs with Tab key
 	if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
 		g.activeTab = (g.activeTab + 1) % 5
 		g.showTabChangeNotification()
 	}
 
-	// Navigasi perpindahan tab menggunakan F1-F5 secara langsung
+	// Switch directly to tabs with F1-F5
 	if inpututil.IsKeyJustPressed(ebiten.KeyF1) {
 		g.activeTab = 0
 		g.showTabChangeNotification()
@@ -186,7 +186,7 @@ func (g *Game) Update() error {
 		g.showTabChangeNotification()
 	}
 
-	// Kontrol Hotkey Tab Bisnis (activeTab == 0)
+	// Business Tab Hotkeys (activeTab == 0)
 	if g.activeTab == 0 {
 		if inpututil.IsKeyJustPressed(ebiten.Key1) || inpututil.IsKeyJustPressed(ebiten.KeyNumpad1) {
 			g.engine.TriggerProduction(0)
@@ -214,7 +214,7 @@ func (g *Game) Update() error {
 		}
 	}
 
-	// Kontrol Hotkey Tab Upgrade (activeTab == 1)
+	// Upgrade Tab Hotkeys (activeTab == 1)
 	if g.activeTab == 1 {
 		boughtIdx := -1
 		if inpututil.IsKeyJustPressed(ebiten.Key1) || inpututil.IsKeyJustPressed(ebiten.KeyNumpad1) || inpututil.IsKeyJustPressed(ebiten.KeyQ) {
@@ -228,31 +228,31 @@ func (g *Game) Update() error {
 		if boughtIdx != -1 {
 			upg := g.engine.GetUpgrades()[boughtIdx]
 			if upg.IsPurchased {
-				g.notification = fmt.Sprintf("[%s SUDAH DIBELI!]", upg.Name)
+				g.notification = fmt.Sprintf("[%s ALREADY PURCHASED!]", upg.Name)
 				g.notificationExpiry = time.Now().Add(2 * time.Second)
 			} else if g.engine.BuyUpgradeCard(boughtIdx) {
-				g.notification = fmt.Sprintf("[%s BERHASIL DIBELI!]", upg.Name)
+				g.notification = fmt.Sprintf("[%s PURCHASED SUCCESSFULLY!]", upg.Name)
 				g.notificationExpiry = time.Now().Add(2 * time.Second)
 			} else {
-				g.notification = fmt.Sprintf("[GAGAL MEMBELI %s (SALDO KURANG)]", upg.Name)
+				g.notification = fmt.Sprintf("[FAILED TO BUY %s (INSUFFICIENT BALANCE)]", upg.Name)
 				g.notificationExpiry = time.Now().Add(2 * time.Second)
 			}
 		}
 
-		// Pemicu Booster Sementara
+		// Temporary Booster triggers
 		if inpututil.IsKeyJustPressed(ebiten.KeyU) {
 			if g.engine.TriggerSuperBoost() {
-				g.notification = "[SUPER BOOST DIAKTIFKAN: KECEPATAN 2X!]"
+				g.notification = "[SUPER BOOST ACTIVATED: 2X SPEED!]"
 				g.notificationExpiry = time.Now().Add(2 * time.Second)
 			} else {
-				g.notification = "[GAGAL AKTIFKAN SUPER BOOST (BUTUH 50 POIN)]"
+				g.notification = "[FAILED TO ACTIVATE SUPER BOOST (REQUIRES 50 POINTS)]"
 				g.notificationExpiry = time.Now().Add(2 * time.Second)
 			}
 		}
 
 		if inpututil.IsKeyJustPressed(ebiten.KeyI) {
 			if g.engine.TriggerTimeWarp() {
-				g.notification = "[TIME WARP BERHASIL: INSTAN +1 JAM PENDAPATAN PASIF!]"
+				g.notification = "[TIME WARP SUCCESS: INSTANT +1 HOUR OF PASSIVE INCOME!]"
 				g.notificationExpiry = time.Now().Add(3 * time.Second)
 			} else {
 				hasAuto := false
@@ -263,16 +263,16 @@ func (g *Game) Update() error {
 					}
 				}
 				if !hasAuto {
-					g.notification = "[GAGAL: TIME WARP MEMBUTUHKAN MINIMAL 1 BISNIS OTOMATIS]"
+					g.notification = "[FAILED: TIME WARP REQUIRES AT LEAST 1 AUTOMATED BUSINESS]"
 				} else {
-					g.notification = "[GAGAL TIME WARP (BUTUH 150 POIN)]"
+					g.notification = "[FAILED TIME WARP (REQUIRES 150 POINTS)]"
 				}
 				g.notificationExpiry = time.Now().Add(3 * time.Second)
 			}
 		}
 	}
 
-	// Kontrol Hotkey Tab Manager (activeTab == 2)
+	// Manager Tab Hotkeys (activeTab == 2)
 	if g.activeTab == 2 {
 		hiredIdx := -1
 		if inpututil.IsKeyJustPressed(ebiten.Key1) || inpututil.IsKeyJustPressed(ebiten.KeyNumpad1) || inpututil.IsKeyJustPressed(ebiten.KeyQ) {
@@ -282,51 +282,51 @@ func (g *Game) Update() error {
 		if hiredIdx != -1 {
 			m := g.engine.GetManagers()[hiredIdx]
 			if m.IsHired {
-				g.notification = fmt.Sprintf("[%s SUDAH DIAKTIFKAN!]", m.Name)
+				g.notification = fmt.Sprintf("[%s ALREADY HIRED!]", m.Name)
 				g.notificationExpiry = time.Now().Add(2 * time.Second)
 			} else if g.engine.BuyManager(hiredIdx) {
-				g.notification = fmt.Sprintf("[%s BERHASIL DIREKRUT!]", m.Name)
+				g.notification = fmt.Sprintf("[%s HIRED SUCCESSFULLY!]", m.Name)
 				g.notificationExpiry = time.Now().Add(2 * time.Second)
 			} else {
-				g.notification = fmt.Sprintf("[GAGAL MEREKRUT %s (SALDO KURANG)]", m.Name)
+				g.notification = fmt.Sprintf("[FAILED TO HIRE %s (INSUFFICIENT BALANCE)]", m.Name)
 				g.notificationExpiry = time.Now().Add(2 * time.Second)
 			}
 		}
 	}
 
-	// Kontrol Hotkey Tab Investor / Prestige (activeTab == 4)
+	// Investor / Prestige Tab Hotkeys (activeTab == 4)
 	if g.activeTab == 4 {
 		if inpututil.IsKeyJustPressed(ebiten.KeyR) {
 			claimable := g.engine.CalculateAngelsToClaim()
 			if claimable <= 0 {
-				g.notification = "[BELUM BISA PRESTIGE (TIDAK ADA INVESTOR UNTUK DIKLAIM)]"
+				g.notification = "[CANNOT PRESTIGE (NO INVESTORS TO CLAIM)]"
 				g.notificationExpiry = time.Now().Add(3 * time.Second)
 				g.prestigeConfirm = false
 			} else if g.prestigeConfirm && time.Now().Before(g.prestigeConfirmExpiry) {
-				// Jalankan reset dan klaim
+				// Run reset and claim
 				if g.engine.ClaimPrestige() {
-					g.notification = "[PRESTIGE BERHASIL! PROGRES DIRESET DENGAN BONUS INVESTOR BARU]"
+					g.notification = "[PRESTIGE SUCCESS! PROGRESS RESET WITH NEW INVESTOR BONUS]"
 					g.notificationExpiry = time.Now().Add(4 * time.Second)
 				}
 				g.prestigeConfirm = false
 			} else {
-				// Memasuki status konfirmasi
+				// Enter confirmation state
 				g.prestigeConfirm = true
 				g.prestigeConfirmExpiry = time.Now().Add(4 * time.Second)
-				g.notification = "[TEKAN 'R' SEKALI LAGI UNTUK KONFIRMASI RESET & KLAIM!]"
+				g.notification = "[PRESS 'R' AGAIN TO CONFIRM RESET & CLAIM!]"
 				g.notificationExpiry = time.Now().Add(4 * time.Second)
 			}
 		}
 	}
 
-	// Kontrol Hotkey Manual Save/Load (Berlaku global)
+	// Manual Save/Load Hotkeys (Global)
 	saveFile := "savegame.json"
 	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
 		state := g.engine.ExportState()
 		if err := save.SaveToFile(saveFile, state); err != nil {
-			g.notification = "[GAGAL MENYIMPAN GAME!]"
+			g.notification = "[FAILED TO SAVE GAME!]"
 		} else {
-			g.notification = "[GAME BERHASIL DISIMPAN!]"
+			g.notification = "[GAME SAVED SUCCESSFULLY!]"
 		}
 		g.notificationExpiry = time.Now().Add(3 * time.Second)
 	}
@@ -334,15 +334,15 @@ func (g *Game) Update() error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyL) {
 		state, err := save.LoadFromFile(saveFile)
 		if err != nil {
-			g.notification = "[GAGAL MEMUAT GAME!]"
+			g.notification = "[FAILED TO LOAD GAME!]"
 		} else {
 			g.engine.ImportState(state)
-			g.notification = "[GAME BERHASIL DIMUAT!]"
+			g.notification = "[GAME LOADED SUCCESSFULLY!]"
 		}
 		g.notificationExpiry = time.Now().Add(3 * time.Second)
 	}
 
-	// Auto-Save tiap 5 detik
+	// Auto-Save every 5 seconds
 	if time.Since(g.lastAutoSave) >= 5*time.Second {
 		g.lastAutoSave = time.Now()
 		state := g.engine.ExportState()
@@ -364,17 +364,17 @@ func (g *Game) spawnFloatingText(x, y float32, text string) {
 
 func (g *Game) showTabChangeNotification() {
 	tabName := map[int]string{
-		0: "LIS LINI BISNIS",
-		1: "PENINGKATAN (UPGRADE)",
-		2: "MANAJER (OTOMATISASI)",
-		3: "PENCAPAIAN (ACHIEVEMENTS)",
-		4: "INVESTOR MALAIKAT (PRESTIGE)",
+		0: "BUSINESS LINES",
+		1: "UPGRADES",
+		2: "MANAGERS (AUTOMATION)",
+		3: "ACHIEVEMENTS",
+		4: "ANGEL INVESTORS (PRESTIGE)",
 	}[g.activeTab]
-	g.notification = fmt.Sprintf("[TAB AKTIF: %s]", tabName)
+	g.notification = fmt.Sprintf("[ACTIVE TAB: %s]", tabName)
 	g.notificationExpiry = time.Now().Add(1500 * time.Millisecond)
 }
 
-// Draw menggambar representasi visual game ke layar.
+// Draw renders the game interface to the screen.
 func (g *Game) Draw(screen *ebiten.Image) {
 	theme := g.themes[g.activeThemeIndex]
 
@@ -389,15 +389,15 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	boostDur := g.engine.GetBoostDuration()
 	var gpsStr string
 	if boostDur > 0 {
-		gpsStr = fmt.Sprintf("SALDO: %.2f POIN (+%.2f/dtk) [BOOST: %.1fs]", balance, g.engine.GetTotalGPS(), boostDur.Seconds())
+		gpsStr = fmt.Sprintf("BALANCE: %.2f POINTS (+%.2f/sec) [BOOST: %.1fs]", balance, g.engine.GetTotalGPS(), boostDur.Seconds())
 	} else {
-		gpsStr = fmt.Sprintf("SALDO: %.2f POIN (+%.2f/dtk)", balance, g.engine.GetTotalGPS())
+		gpsStr = fmt.Sprintf("BALANCE: %.2f POINTS (+%.2f/sec)", balance, g.engine.GetTotalGPS())
 	}
 	ebitenutil.DebugPrintAt(screen, gpsStr, 20, 30)
 
-	modeStr := "MODE BELI: [1x] (Tekan [M] untuk Maks)"
+	modeStr := "BUY MODE: [1x] (Press [M] for Max)"
 	if g.buyMaxMode {
-		modeStr = "MODE BELI: [MAKS] (Tekan [M] untuk 1x)"
+		modeStr = "BUY MODE: [MAX] (Press [M] for 1x)"
 	}
 	ebitenutil.DebugPrintAt(screen, modeStr, 340, 30)
 
@@ -406,18 +406,18 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		ebitenutil.DebugPrintAt(screen, g.notification, 320, 12)
 	}
 
-	// Gambar Tab Header (5 Tab UI) dengan warna dinamis sesuai tema aktif
+	// Draw Tab Header (5 Tab UI) with dynamic colors according to active theme
 	tabs := []struct {
 		tabIdx int
 		title  string
 		hotkey string
 		color  color.RGBA
 	}{
-		{0, " BISNIS", "F1", theme.Blue},
-		{1, "UPGRADE", "F2", theme.Green},
-		{2, "MANAGER", "F3", theme.Yellow},
+		{0, "BUSINESS", "F1", theme.Blue},
+		{1, "UPGRADES", "F2", theme.Green},
+		{2, "MANAGERS", "F3", theme.Yellow},
 		{3, "ACHIEVE", "F4", theme.Pink},
-		{4, "INVESTOR", "F5", theme.Orange},
+		{4, "PRESTIGE", "F5", theme.Orange},
 	}
 
 	for i, t := range tabs {
@@ -437,26 +437,26 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		ebitenutil.DebugPrintAt(screen, txt, x+3, 53)
 	}
 
-	ebitenutil.DebugPrintAt(screen, "(Tekan F1-F5 atau [TAB])", 475, 53)
+	ebitenutil.DebugPrintAt(screen, "(Press F1-F5 or [TAB])", 475, 53)
 
-	// TAB 1: BISNIS
+	// TAB 1: BUSINESS
 	if g.activeTab == 0 {
 		businesses := g.engine.GetBusinesses()
 		for i, b := range businesses {
 			y := 88 + i*112
 
-			// Judul Bisnis & Level dengan Target Milestones Kecepatan
+			// Business Title & Level with Speed Milestone Targets
 			var statusText string
 			if b.IsOwned() {
-				statusText = fmt.Sprintf("Lv. %d/%d (Akselerasi 2x)", b.GetLevel(), b.GetNextMilestone())
+				statusText = fmt.Sprintf("Lv. %d/%d (Speed 2x)", b.GetLevel(), b.GetNextMilestone())
 			} else {
-				statusText = "Belum Dimiliki"
+				statusText = "Locked"
 			}
 			
 			businessTitle := fmt.Sprintf("%d. %s (%s)", i+1, b.Name, statusText)
 			ebitenutil.DebugPrintAt(screen, businessTitle, 20, y)
 
-			// Detail Produksi & Biaya Upgrade
+			// Production Details & Upgrade Cost
 			var detailText string
 			var actionText string
 
@@ -465,12 +465,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			
 			var costColor string
 			if canAfford {
-				costColor = "Bisa Beli"
+				costColor = "Buy"
 			} else {
-				costColor = "Saldo Kurang"
+				costColor = "Locked"
 			}
 
-			// Konfigurasi tombol shortcut
+			// Shortcut key configurations
 			var keyName string
 			switch i {
 			case 0:
@@ -482,23 +482,23 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			}
 
 			if b.IsOwned() {
-				detailText = fmt.Sprintf("Penghasilan: %.2f Poin / %s (+%.2f/dtk)", b.Income(), b.Duration, b.GetGPS())
+				detailText = fmt.Sprintf("Revenue: %.2f Points / %s (+%.2f/sec)", b.Income(), b.Duration, b.GetGPS())
 			} else {
-				detailText = fmt.Sprintf("Penghasilan Awal: %.2f Poin / %s", b.BaseIncome, b.Duration)
+				detailText = fmt.Sprintf("Base Revenue: %.2f Points / %s", b.BaseIncome, b.Duration)
 			}
 
 			if g.buyMaxMode {
 				levels, totalCost := mathutil.CalculateMaxLevelsAffordable(b.BaseCost, b.CostMultiplier, b.GetLevel(), balance)
 				if levels > 0 {
-					actionText = fmt.Sprintf("Beli Maks: Tekan [%s] (Dapat +%d Level, Biaya: %.2f) [Bisa Beli]", keyName, levels, totalCost)
+					actionText = fmt.Sprintf("Buy Max: Press [%s] (Get +%d Levels, Cost: %.2f) [Buy]", keyName, levels, totalCost)
 				} else {
-					actionText = fmt.Sprintf("Beli Maks: Tekan [%s] (Biaya: %.2f) [Saldo Kurang]", keyName, cost)
+					actionText = fmt.Sprintf("Buy Max: Press [%s] (Cost: %.2f) [Locked]", keyName, cost)
 				}
 			} else {
 				if b.IsAutomated {
-					actionText = fmt.Sprintf("Upgrade: Tekan [%s] (Biaya: %.2f) [%s] (Otomatis)", keyName, cost, costColor)
+					actionText = fmt.Sprintf("Upgrade: Press [%s] (Cost: %.2f) [%s] (Auto)", keyName, cost, costColor)
 				} else {
-					actionText = fmt.Sprintf("Upgrade: Tekan [%s] (Biaya: %.2f) [%s] | Mulai: Tekan [%d]", keyName, cost, costColor, i+1)
+					actionText = fmt.Sprintf("Upgrade: Press [%s] (Cost: %.2f) [%s] | Start: Press [%d]", keyName, cost, costColor, i+1)
 				}
 			}
 
@@ -511,7 +511,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			barW := 600
 			barH := 12
 
-			// Background Progress Bar (grayish-blue) dari tema aktif
+			// Background Progress Bar from active theme
 			vector.DrawFilledRect(screen, float32(barX), float32(barY), float32(barW), float32(barH), theme.CardBg, false)
 
 			// Fill Progress Bar
@@ -527,99 +527,99 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			}
 		}
 
-		ebitenutil.DebugPrintAt(screen, "Petunjuk: Bisnis otomatis akan langsung berproduksi secara mandiri setelah dibeli.", 20, 422)
+		ebitenutil.DebugPrintAt(screen, "Hint: Automated businesses will start producing on their own once purchased.", 20, 422)
 	}
 
 	// TAB 2: UPGRADE
 	if g.activeTab == 1 {
-		// 1. Upgrade Cards di Sisi Kiri (x=20 sampai x=400)
+		// 1. Upgrade Cards on the Left Side (x=20 to x=400)
 		upgrades := g.engine.GetUpgrades()
 		for i, upg := range upgrades {
 			y := 88 + i*108
 
-			// Draw card background (box lebar 380) dari tema aktif
+			// Draw card background (box lebar 380) from active theme
 			vector.DrawFilledRect(screen, 20, float32(y), 380, 95, theme.CardBg, false)
 
 			titleText := fmt.Sprintf("[%d] %s", i+1, upg.Name)
 			if upg.IsPurchased {
-				titleText += " (TERBELI)"
+				titleText += " (PURCHASED)"
 			}
 			ebitenutil.DebugPrintAt(screen, titleText, 35, y+10)
 			ebitenutil.DebugPrintAt(screen, upg.Description, 35, y+30)
 
 			var actionText string
 			if upg.IsPurchased {
-				actionText = "Stat: Peningkatan Aktif"
+				actionText = "Stat: Upgrade Active"
 			} else {
 				canAfford := wallet.CanAfford(upg.Cost)
-				statusColor := "Saldo Kurang"
+				statusColor := "Locked"
 				if canAfford {
-					statusColor = "Bisa Beli"
+					statusColor = "Buy"
 				}
-				actionText = fmt.Sprintf("Beli: Tekan [%s] (Biaya: %.2f) [%s]", map[int]string{0: "Q", 1: "W", 2: "E"}[i], upg.Cost, statusColor)
+				actionText = fmt.Sprintf("Buy: Press [%s] (Cost: %.2f) [%s]", map[int]string{0: "Q", 1: "W", 2: "E"}[i], upg.Cost, statusColor)
 			}
 			ebitenutil.DebugPrintAt(screen, actionText, 35, y+55)
 		}
 
-		ebitenutil.DebugPrintAt(screen, "Petunjuk: Peningkatan memodifikasi multiplier permanen.", 20, 422)
+		ebitenutil.DebugPrintAt(screen, "Hint: Upgrades modify global permanent multipliers.", 20, 422)
 
-		// 2. Toko Booster Sementara di Sisi Kanan (x=420 sampai x=620)
-		ebitenutil.DebugPrintAt(screen, "=== TOKO BOOSTER SEMENTARA ===", 420, 88)
+		// 2. Temporary Booster Shop on the Right Side (x=420 to x=620)
+		ebitenutil.DebugPrintAt(screen, "=== TEMPORARY BOOSTER SHOP ===", 420, 88)
 
 		// Kartu Super Boost (y=110)
 		vector.DrawFilledRect(screen, 420, 110, 200, 100, theme.CardBg, false)
 		ebitenutil.DebugPrintAt(screen, "[U] SUPER BOOST", 435, 120)
-		ebitenutil.DebugPrintAt(screen, "2x Kecepatan (30s)", 435, 140)
-		ebitenutil.DebugPrintAt(screen, "Biaya: 50.00 Poin", 435, 160)
-		boostStatus := "[Saldo Kurang]"
+		ebitenutil.DebugPrintAt(screen, "2x Speed (30s)", 435, 140)
+		ebitenutil.DebugPrintAt(screen, "Cost: 50.00 Points", 435, 160)
+		boostStatus := "[Locked]"
 		if wallet.CanAfford(50.0) {
-			boostStatus = "[Bisa Beli]"
+			boostStatus = "[Buy]"
 		}
 		ebitenutil.DebugPrintAt(screen, boostStatus, 435, 180)
 
 		// Kartu Time Warp (y=230)
 		vector.DrawFilledRect(screen, 420, 230, 200, 100, theme.CardBg, false)
 		ebitenutil.DebugPrintAt(screen, "[I] TIME WARP", 435, 240)
-		ebitenutil.DebugPrintAt(screen, "Instan +1 Jam Otomatis", 435, 260)
-		ebitenutil.DebugPrintAt(screen, "Biaya: 150.00 Poin", 435, 280)
-		warpStatus := "[Saldo Kurang]"
+		ebitenutil.DebugPrintAt(screen, "Instant +1 Hr Auto Revenue", 435, 260)
+		ebitenutil.DebugPrintAt(screen, "Cost: 150.00 Points", 435, 280)
+		warpStatus := "[Locked]"
 		if wallet.CanAfford(150.0) {
-			warpStatus = "[Bisa Beli]"
+			warpStatus = "[Buy]"
 		}
 		ebitenutil.DebugPrintAt(screen, warpStatus, 435, 300)
 	}
 
-	// TAB 3: MANAGER
+	// TAB 3: MANAGERS
 	if g.activeTab == 2 {
 		managers := g.engine.GetManagers()
 		for i, m := range managers {
 			y := 88 + i*108
 
-			// Draw card background (box) dari tema aktif
+			// Draw card background (box) from active theme
 			vector.DrawFilledRect(screen, 20, float32(y), 600, 95, theme.CardBg, false)
 
 			titleText := fmt.Sprintf("[%d] %s", i+1, m.Name)
 			if m.IsHired {
-				titleText += " (DIAKTIFKAN)"
+				titleText += " (HIRED)"
 			}
 			ebitenutil.DebugPrintAt(screen, titleText, 35, y+10)
 			ebitenutil.DebugPrintAt(screen, m.Description, 35, y+30)
 
 			var actionText string
 			if m.IsHired {
-				actionText = "Otomatisasi: Aktif"
+				actionText = "Automation: Active"
 			} else {
 				canAfford := wallet.CanAfford(m.Cost)
-				statusColor := "Saldo Kurang"
+				statusColor := "Locked"
 				if canAfford {
-					statusColor = "Bisa Beli"
+					statusColor = "Buy"
 				}
-				actionText = fmt.Sprintf("Pekerjakan: Tekan [%d] / [%s] (Biaya: %.2f) [%s]", i+1, map[int]string{0: "Q", 1: "W", 2: "E"}[i], m.Cost, statusColor)
+				actionText = fmt.Sprintf("Hire: Press [%d] / [%s] (Cost: %.2f) [%s]", i+1, map[int]string{0: "Q", 1: "W", 2: "E"}[i], m.Cost, statusColor)
 			}
 			ebitenutil.DebugPrintAt(screen, actionText, 35, y+55)
 		}
 
-		ebitenutil.DebugPrintAt(screen, "Petunjuk: Manajer berguna untuk mengotomatiskan Lini Bisnis manual agar berproduksi secara mandiri.", 20, 422)
+		ebitenutil.DebugPrintAt(screen, "Hint: Managers automate manual Business Lines to run on their own.", 20, 422)
 	}
 
 	// TAB 4: ACHIEVEMENTS
@@ -628,7 +628,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		for i, ach := range achievements {
 			y := 88 + i*108
 
-			// Draw card background (box) dari tema aktif
+			// Draw card background (box) from active theme
 			var boxColor color.RGBA
 			if ach.IsUnlocked {
 				boxColor = color.RGBA{
@@ -644,23 +644,23 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 			titleText := ach.Name
 			if ach.IsUnlocked {
-				titleText += " (TERBUKA)"
+				titleText += " (UNLOCKED)"
 			} else {
-				titleText += " (TERKUNCI)"
+				titleText += " (LOCKED)"
 			}
 			ebitenutil.DebugPrintAt(screen, titleText, 35, y+10)
 			ebitenutil.DebugPrintAt(screen, ach.Description, 35, y+30)
 
 			var statusText string
 			if ach.IsUnlocked {
-				statusText = "Status: Bonus +10%/20% Modifikasi Aktif"
+				statusText = "Status: +10%/20% Modifier Active"
 			} else {
-				statusText = "Status: Kondisi belum terpenuhi"
+				statusText = "Status: Conditions not met"
 			}
 			ebitenutil.DebugPrintAt(screen, statusText, 35, y+55)
 		}
 
-		ebitenutil.DebugPrintAt(screen, "Petunjuk: Pencapaian terbuka secara otomatis jika kondisi terpenuhi, memberikan bonus pendapatan permanen.", 20, 422)
+		ebitenutil.DebugPrintAt(screen, "Hint: Achievements unlock automatically when conditions are met, giving permanent global revenue boosts.", 20, 422)
 	}
 
 	// TAB 5: INVESTOR / PRESTIGE
@@ -669,41 +669,41 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		angels := g.engine.GetAngels()
 		claimable := g.engine.CalculateAngelsToClaim()
 
-		// 1. Statistik Card dari tema aktif
+		// 1. Statistics Card from active theme
 		vector.DrawFilledRect(screen, 20, 88, 600, 110, theme.CardBg, false)
-		ebitenutil.DebugPrintAt(screen, "STATISTIK SEPANJANG MASA (LIFETIME STATS):", 35, 98)
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Total Akumulasi Pendapatan : %.2f Poin", lifetime), 35, 120)
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Angel Investors Dimiliki  : %d Investor", angels), 35, 142)
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Bonus Pengali Pendapatan  : +%d%% Pendapatan (Global)", angels*5), 35, 164)
+		ebitenutil.DebugPrintAt(screen, "LIFETIME STATISTICS:", 35, 98)
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Total Accumulated Revenue : %.2f Points", lifetime), 35, 120)
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Angel Investors Owned     : %d Angels", angels), 35, 142)
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Global Revenue Multiplier : +%d%% Revenue (Global)", angels*5), 35, 164)
 
-		// 2. Prestige Card dari tema aktif
+		// 2. Prestige Card from active theme
 		vector.DrawFilledRect(screen, 20, 218, 600, 130, theme.CardBg, false)
-		ebitenutil.DebugPrintAt(screen, "RESET PRESTIS (INVESTASI MALAIKAT):", 35, 228)
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Investor Baru untuk Diklaim : +%d Investor", claimable), 35, 250)
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Efek Bonus Setelah Klaim    : +%d%% Pendapatan (Global)", (angels+claimable)*5), 35, 272)
+		ebitenutil.DebugPrintAt(screen, "RESET PRESTIGE (CLAIM ANGEL INVESTORS):", 35, 228)
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - New Angels to Claim      : +%d Angels", claimable), 35, 250)
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Expected Global Multiplier: +%d%% Revenue (Global)", (angels+claimable)*5), 35, 272)
 
 		var prestigeText string
 		if claimable <= 0 {
-			prestigeText = "Tindakan: Belum ada investor baru untuk diklaim (Minimal 100 Poin sepanjang masa)."
+			prestigeText = "Action: No new angels to claim (Requires at least 100 Lifetime Points)."
 		} else if g.prestigeConfirm {
-			prestigeText = "[TEKAN 'R' SEKALI LAGI UNTUK KONFIRMASI RESET & KLAIM!]"
+			prestigeText = "[PRESS 'R' AGAIN TO CONFIRM RESET & CLAIM!]"
 		} else {
-			prestigeText = "Tindakan: Tekan [R] untuk memicu reset progres & klaim investor baru."
+			prestigeText = "Action: Press [R] to trigger prestige reset & claim new angels."
 		}
 		ebitenutil.DebugPrintAt(screen, prestigeText, 35, 305)
 
 		// Keterangan
-		ebitenutil.DebugPrintAt(screen, "Info: Melakukan Prestige akan mereset saldo, level bisnis, upgrade, dan manajer Anda.", 20, 365)
-		ebitenutil.DebugPrintAt(screen, "Namun, Angel Investors memberikan +5% pendapatan permanen global. Pencapaian tidak direset.", 20, 385)
+		ebitenutil.DebugPrintAt(screen, "Info: Performing Prestige resets balance, business levels, upgrades, and managers.", 20, 365)
+		ebitenutil.DebugPrintAt(screen, "However, Angel Investors grant +5% permanent global revenue boost. Achievements are NOT reset.", 20, 385)
 	}
 
-	// Footer (Global) & Banner Event Acak Aktif
+	// Footer (Global) & Active Random Event Ticker
 	activeEvt, eventDur := g.engine.GetActiveEvent()
 	if activeEvt != nil {
-		eventStr := fmt.Sprintf("[BERITA SELA] %s: %s (Sisa %.1fs)", activeEvt.Title, activeEvt.Description, eventDur.Seconds())
+		eventStr := fmt.Sprintf("[BREAKING NEWS] %s: %s (Remaining %.1fs)", activeEvt.Title, activeEvt.Description, eventDur.Seconds())
 		ebitenutil.DebugPrintAt(screen, eventStr, 20, 435)
 	}
-	ebitenutil.DebugPrintAt(screen, "Fitur: [S] Simpan Manual | [L] Muat Manual | Auto-save aktif (5s)", 20, 455)
+	ebitenutil.DebugPrintAt(screen, "Features: [S] Manual Save | [L] Manual Load | Auto-save active (5s)", 20, 455)
 
 	// Render Floating Texts
 	for _, ft := range g.floatingTexts {
@@ -711,7 +711,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 }
 
-// Layout mengembalikan ukuran layar game.
+// Layout returns the virtual screen size.
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return 640, 480
 }

@@ -8,44 +8,44 @@ import (
 )
 
 func TestUpgradeAndModifiers(t *testing.T) {
-	// Buat bisnis manual
+		// Create manual business
 	b := business.NewBusiness("lemonade", "Lemonade Stand", 10.0, 1.15, 2.0, time.Second, false)
 	b.Upgrade() // level 1
 
-	// Sebelum upgrade: income = 2.0, duration = 1s
+	// Before upgrade: income = 2.0, duration = 1s
 	if b.Income() != 2.0 {
 		t.Errorf("expected income 2.0, got %f", b.Income())
 	}
 
-	// Buat modifier: 2x revenue, 2x speed
+	// Create modifier: 2x revenue, 2x speed
 	mod := modifier.NewModifier(2.0, 2.0)
 	
-	// Buat upgrade item
+	// Create upgrade item
 	upg := NewUpgrade("lemon_pitcher", "Lemon Pitcher", "Double Lemonade revenue and speed", 15.0, "lemonade", mod)
 	
 	if upg.IsPurchased {
 		t.Error("expected upgrade to be unpurchased initially")
 	}
 
-	// Beli upgrade
+	// Purchase upgrade
 	upg.Purchase()
 	if !upg.IsPurchased {
 		t.Error("expected upgrade to be purchased")
 	}
 
-	// Terapkan modifier ke bisnis
+	// Apply modifiers to business
 	b.SetModifiers(upg.Effect.RevenueMultiplier, upg.Effect.SpeedMultiplier)
 
-	// Setelah modifier: income = 2.0 * 2.0 = 4.0
+	// After modifier: income = 2.0 * 2.0 = 4.0
 	if b.Income() != 4.0 {
 		t.Errorf("expected income 4.0 after modifier, got %f", b.Income())
 	}
 
-	// Jalankan produksi
+	// Start production
 	b.StartProduction()
 
-	// Update dengan 500ms (karena speedMultiplier = 2x, maka durasi efektif adalah 1s / 2 = 500ms)
-	// Jadi 500ms harus menyelesaikan produksi
+	// Update with 500ms (speedMultiplier = 2x, so effective duration is 1s / 2 = 500ms)
+	// Thus 500ms should complete the production
 	revenue := b.Update(500 * time.Millisecond)
 	if revenue != 4.0 {
 		t.Errorf("expected revenue 4.0 after 500ms (speed 2x), got %f", revenue)

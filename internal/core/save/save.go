@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// BizState menampung data penyimpanan untuk setiap lini bisnis.
+// BizState holds save data for each business line.
 type BizState struct {
 	ID         string        `json:"id"`
 	Level      int           `json:"level"`
@@ -14,7 +14,7 @@ type BizState struct {
 	ProgressNs time.Duration `json:"progress_ns"`
 }
 
-// SaveState adalah struktur data utama untuk file penyimpanan game (JSON).
+// SaveState is the main data structure for the game save file.
 type SaveState struct {
 	Balance          float64    `json:"balance"`
 	Businesses       []BizState `json:"businesses"`
@@ -29,14 +29,14 @@ type SaveState struct {
 
 const xorKey byte = 0xAB
 
-// SaveToFile menulis data SaveState ke file lokal dalam bentuk terenkripsi XOR sederhana.
+// SaveToFile writes the SaveState data to a local file using simple XOR encryption.
 func SaveToFile(filename string, state *SaveState) error {
 	data, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
 
-	// Enkripsi XOR sederhana
+	// Simple XOR encryption
 	encrypted := make([]byte, len(data))
 	for i := 0; i < len(data); i++ {
 		encrypted[i] = data[i] ^ xorKey
@@ -45,23 +45,23 @@ func SaveToFile(filename string, state *SaveState) error {
 	return os.WriteFile(filename, encrypted, 0644)
 }
 
-// LoadFromFile membaca file lokal dan mengembalikan SaveState (mendukung file terenkripsi dan mentah legacy).
+// LoadFromFile reads the local file and returns the SaveState (supports both encrypted and legacy raw JSON).
 func LoadFromFile(filename string) (*SaveState, error) {
 	encrypted, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	// Dekripsi data
+	// Decrypt data
 	decrypted := make([]byte, len(encrypted))
 	for i := 0; i < len(encrypted); i++ {
 		decrypted[i] = encrypted[i] ^ xorKey
 	}
 
 	var state SaveState
-	// Coba unmarshal data terdekripsi terlebih dahulu
+	// Try to unmarshal the decrypted data first
 	if err := json.Unmarshal(decrypted, &state); err != nil {
-		// Jika gagal (kemungkinan karena file lama yang belum dienkripsi), coba muat data mentah asli
+		// If it fails (likely a legacy unencrypted save), attempt to load the raw data
 		if errLegacy := json.Unmarshal(encrypted, &state); errLegacy != nil {
 			return nil, err
 		}

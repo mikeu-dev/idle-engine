@@ -1,18 +1,18 @@
 package event
 
-// Achievement mewakili pencapaian di dalam game yang memberikan bonus.
+// Achievement represents a game achievement that awards bonuses.
 type Achievement struct {
 	ID               string
 	Name             string
 	Description      string
-	ConditionType    string  // "balance" (untuk saldo), "level" (untuk tingkat level bisnis)
-	TargetBusinessID string  // ID bisnis target (misal "lemonade") atau "" untuk global
-	TargetValue      float64 // Batas level atau saldo untuk membuka pencapaian
+	ConditionType    string  // "balance" (for wallet balance), "level" (for business level)
+	TargetBusinessID string  // Target business ID (e.g. "lemonade") or "" for global
+	TargetValue      float64 // Level or balance threshold to unlock the achievement
 	IsUnlocked       bool
-	BonusMultiplier  float64 // Bonus multiplier pendapatan (misal 0.10 untuk +10% pendapatan)
+	BonusMultiplier  float64 // Revenue bonus multiplier (e.g. 0.10 for +10% revenue)
 }
 
-// NewAchievement membuat instance Achievement baru.
+// NewAchievement creates a new Achievement instance.
 func NewAchievement(id, name, desc, condType, target string, val, bonus float64) *Achievement {
 	return &Achievement{
 		ID:               id,
@@ -26,12 +26,12 @@ func NewAchievement(id, name, desc, condType, target string, val, bonus float64)
 	}
 }
 
-// Unlock membuka pencapaian.
+// Unlock unlocks the achievement.
 func (a *Achievement) Unlock() {
 	a.IsUnlocked = true
 }
 
-// CheckCondition memvalidasi apakah kondisi pencapaian terpenuhi.
+// CheckCondition validates whether achievement conditions are met.
 func (a *Achievement) CheckCondition(balance float64, businessLevels map[string]int) bool {
 	if a.IsUnlocked {
 		return false

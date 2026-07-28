@@ -6,7 +6,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// BizConfig merepresentasikan konfigurasi awal lini bisnis.
+// BizConfig represents the initial configuration of a business line.
 type BizConfig struct {
 	ID             string  `yaml:"id"`
 	Name           string  `yaml:"name"`
@@ -17,7 +17,7 @@ type BizConfig struct {
 	IsAutomated    bool    `yaml:"is_automated"`
 }
 
-// UpgradeConfig merepresentasikan konfigurasi item upgrade.
+// UpgradeConfig represents the configuration of an upgrade item.
 type UpgradeConfig struct {
 	ID                string  `yaml:"id"`
 	Name              string  `yaml:"name"`
@@ -28,7 +28,7 @@ type UpgradeConfig struct {
 	SpeedMultiplier   float64 `yaml:"speed_multiplier"`
 }
 
-// ManagerConfig merepresentasikan konfigurasi manager otomatisasi.
+// ManagerConfig represents the configuration of an automation manager.
 type ManagerConfig struct {
 	ID               string  `yaml:"id"`
 	Name             string  `yaml:"name"`
@@ -37,7 +37,7 @@ type ManagerConfig struct {
 	TargetBusinessID string  `yaml:"target_business_id"`
 }
 
-// AchievementConfig merepresentasikan konfigurasi syarat achievement.
+// AchievementConfig represents the configuration of an achievement requirement.
 type AchievementConfig struct {
 	ID               string  `yaml:"id"`
 	Name             string  `yaml:"name"`
@@ -48,7 +48,7 @@ type AchievementConfig struct {
 	BonusMultiplier  float64 `yaml:"bonus_multiplier"`
 }
 
-// GameConfig menampung seluruh konfigurasi game ter-parsing.
+// GameConfig holds the entire parsed game configurations.
 type GameConfig struct {
 	Businesses   []BizConfig         `yaml:"businesses"`
 	Upgrades     []UpgradeConfig     `yaml:"upgrades"`
@@ -56,7 +56,7 @@ type GameConfig struct {
 	Achievements []AchievementConfig `yaml:"achievements"`
 }
 
-// LoadConfig memuat berkas konfigurasi YAML dari path eksternal.
+// LoadConfig loads the YAML configuration file from the specified path.
 func LoadConfig(filepath string) (*GameConfig, error) {
 	file, err := os.Open(filepath)
 	if err != nil {

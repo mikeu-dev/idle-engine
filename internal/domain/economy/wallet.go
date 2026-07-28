@@ -2,27 +2,27 @@ package economy
 
 import "sync"
 
-// Wallet mengelola saldo mata uang dalam game.
+// Wallet manages the game currency balance.
 type Wallet struct {
 	mu      sync.RWMutex
 	balance float64
 }
 
-// NewWallet membuat instansi Wallet baru dengan saldo awal.
+// NewWallet creates a new Wallet instance with an initial balance.
 func NewWallet(initialBalance float64) *Wallet {
 	return &Wallet{
 		balance: initialBalance,
 	}
 }
 
-// Balance mengembalikan saldo dompet saat ini.
+// Balance returns the current wallet balance.
 func (w *Wallet) Balance() float64 {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	return w.balance
 }
 
-// Add menambahkan sejumlah uang ke dalam dompet.
+// Add adds a specified amount to the wallet.
 func (w *Wallet) Add(amount float64) {
 	if amount <= 0 {
 		return
@@ -32,8 +32,8 @@ func (w *Wallet) Add(amount float64) {
 	w.balance += amount
 }
 
-// Spend membelanjakan uang dari dompet jika saldo mencukupi.
-// Mengembalikan true jika transaksi sukses, dan false jika saldo kurang.
+// Spend deducts the amount from the wallet if balance is sufficient.
+// Returns true if the transaction was successful, false otherwise.
 func (w *Wallet) Spend(amount float64) bool {
 	if amount <= 0 {
 		return false
@@ -48,7 +48,7 @@ func (w *Wallet) Spend(amount float64) bool {
 	return false
 }
 
-// CanAfford memeriksa apakah saldo dompet mencukupi untuk nominal tertentu.
+// CanAfford checks if the wallet balance is sufficient for a specified amount.
 func (w *Wallet) CanAfford(amount float64) bool {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
