@@ -18,6 +18,7 @@ type BizState struct {
 type SaveState struct {
 	Balance    float64    `json:"balance"`
 	Businesses []BizState `json:"businesses"`
+	Upgrades   []string   `json:"upgrades"`
 	Timestamp  time.Time  `json:"timestamp"`
 }
 
