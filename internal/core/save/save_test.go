@@ -60,3 +60,45 @@ func TestSaveLoad(t *testing.T) {
 		}
 	}
 }
+
+func TestLegacySaveLoad(t *testing.T) {
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "legacy_savegame.json")
+
+	// Tulis data JSON polos langsung ke file untuk menyimulasikan savegame lama
+	legacyJSON := `{"balance":999.99,"lifetime_earnings":999.99,"angels":3,"timestamp":"2026-07-28T12:00:00Z"}`
+	err := os.WriteFile(tempFile, []byte(legacyJSON), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Coba muat dengan load file terenkripsi yang baru
+	loadedState, err := LoadFromFile(tempFile)
+	if err != nil {
+		t.Fatalf("failed to load legacy state: %v", err)
+	}
+
+	if loadedState.Balance != 999.99 || loadedState.Angels != 3 {
+		t.Errorf("loaded legacy values incorrect: %+v", loadedState)
+	}
+}
+
+func TestSavedFileIsEncrypted(t *testing.T) {
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "encrypted_savegame.json")
+
+	state := &SaveState{
+		Balance: 123.45,
+	}
+	_ = SaveToFile(tempFile, state)
+
+	rawBytes, err := os.ReadFile(tempFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Pastikan byte pertama bukan '{' (pembuka JSON) karena sudah terenkripsi
+	if len(rawBytes) > 0 && rawBytes[0] == '{' {
+		t.Error("expected saved file to be encrypted, but starts with '{'")
+	}
+}

@@ -26,24 +26,44 @@ type SaveState struct {
 	Timestamp        time.Time  `json:"timestamp"`
 }
 
-// SaveToFile menulis data SaveState ke file lokal dalam format JSON.
+const xorKey byte = 0xAB
+
+// SaveToFile menulis data SaveState ke file lokal dalam bentuk terenkripsi XOR sederhana.
 func SaveToFile(filename string, state *SaveState) error {
-	data, err := json.MarshalIndent(state, "", "  ")
+	data, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filename, data, 0644)
+
+	// Enkripsi XOR sederhana
+	encrypted := make([]byte, len(data))
+	for i := 0; i < len(data); i++ {
+		encrypted[i] = data[i] ^ xorKey
+	}
+
+	return os.WriteFile(filename, encrypted, 0644)
 }
 
-// LoadFromFile membaca file lokal dan mengembalikan SaveState.
+// LoadFromFile membaca file lokal dan mengembalikan SaveState (mendukung file terenkripsi dan mentah legacy).
 func LoadFromFile(filename string) (*SaveState, error) {
-	data, err := os.ReadFile(filename)
+	encrypted, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
+
+	// Dekripsi data
+	decrypted := make([]byte, len(encrypted))
+	for i := 0; i < len(encrypted); i++ {
+		decrypted[i] = encrypted[i] ^ xorKey
+	}
+
 	var state SaveState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, err
+	// Coba unmarshal data terdekripsi terlebih dahulu
+	if err := json.Unmarshal(decrypted, &state); err != nil {
+		// Jika gagal (kemungkinan karena file lama yang belum dienkripsi), coba muat data mentah asli
+		if errLegacy := json.Unmarshal(encrypted, &state); errLegacy != nil {
+			return nil, err
+		}
 	}
 	return &state, nil
 }
