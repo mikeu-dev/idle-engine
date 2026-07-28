@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"idle-engine/engine"
 	"idle-engine/internal/core/save"
+	"idle-engine/pkg/mathutil"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -12,6 +13,26 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
+
+// FloatingText merepresentasikan teks mengambang kecil di layar.
+type FloatingText struct {
+	x, y      float32
+	text      string
+	alpha     float32
+	createdAt time.Time
+}
+
+// UITheme mendefinisikan palet warna terintegrasi untuk tampilan game.
+type UITheme struct {
+	Name      string
+	BgColor   color.RGBA
+	CardBg    color.RGBA
+	Blue      color.RGBA
+	Green     color.RGBA
+	Yellow    color.RGBA
+	Pink      color.RGBA
+	Orange    color.RGBA
+}
 
 // Game mengimplementasikan interface ebiten.Game.
 type Game struct {
@@ -22,14 +43,55 @@ type Game struct {
 	activeTab             int // 0: Bisnis, 1: Upgrade, 2: Manager, 3: Achievements, 4: Investor
 	prestigeConfirm       bool
 	prestigeConfirmExpiry time.Time
+	buyMaxMode            bool
+	prevProgress          []time.Duration
+	floatingTexts         []FloatingText
+	activeThemeIndex      int
+	themes                []UITheme
 }
 
 // NewGame membuat instance Game baru dengan engine yang diberikan.
 func NewGame(eng *engine.Engine) *Game {
+	themes := []UITheme{
+		{
+			Name:    "Catppuccin Mocha",
+			BgColor: color.RGBA{R: 30, G: 30, B: 46, A: 255},
+			CardBg:  color.RGBA{R: 45, G: 45, B: 60, A: 255},
+			Blue:    color.RGBA{R: 137, G: 180, B: 250, A: 255},
+			Green:   color.RGBA{R: 166, G: 227, B: 161, A: 255},
+			Yellow:  color.RGBA{R: 249, G: 226, B: 175, A: 255},
+			Pink:    color.RGBA{R: 245, G: 194, B: 231, A: 255},
+			Orange:  color.RGBA{R: 250, G: 179, B: 135, A: 255},
+		},
+		{
+			Name:    "Cyberpunk Neon",
+			BgColor: color.RGBA{R: 10, G: 10, B: 20, A: 255},
+			CardBg:  color.RGBA{R: 25, G: 15, B: 35, A: 255},
+			Blue:    color.RGBA{R: 0, G: 240, B: 255, A: 255},
+			Green:   color.RGBA{R: 57, G: 255, B: 20, A: 255},
+			Yellow:  color.RGBA{R: 255, G: 255, B: 51, A: 255},
+			Pink:    color.RGBA{R: 255, G: 0, B: 127, A: 255},
+			Orange:  color.RGBA{R: 255, G: 110, B: 0, A: 255},
+		},
+		{
+			Name:    "Nordic Frost",
+			BgColor: color.RGBA{R: 46, G: 52, B: 64, A: 255},
+			CardBg:  color.RGBA{R: 59, G: 66, B: 82, A: 255},
+			Blue:    color.RGBA{R: 136, G: 192, B: 208, A: 255},
+			Green:   color.RGBA{R: 163, G: 190, B: 140, A: 255},
+			Yellow:  color.RGBA{R: 235, G: 203, B: 139, A: 255},
+			Pink:    color.RGBA{R: 180, G: 142, B: 173, A: 255},
+			Orange:  color.RGBA{R: 208, G: 135, B: 112, A: 255},
+		},
+	}
+
 	return &Game{
-		engine:       eng,
-		lastAutoSave: time.Now(),
-		activeTab:    0,
+		engine:           eng,
+		lastAutoSave:     time.Now(),
+		activeTab:        0,
+		buyMaxMode:       false,
+		themes:           themes,
+		activeThemeIndex: 0,
 	}
 }
 
@@ -46,6 +108,54 @@ func (g *Game) Update() error {
 	// Reset prestige confirm state jika sudah kedaluwarsa
 	if g.prestigeConfirm && time.Now().After(g.prestigeConfirmExpiry) {
 		g.prestigeConfirm = false
+	}
+
+	// Toggle Mode Beli dengan M (Berlaku Global)
+	if inpututil.IsKeyJustPressed(ebiten.KeyM) {
+		g.buyMaxMode = !g.buyMaxMode
+		if g.buyMaxMode {
+			g.notification = "[MODE UPGRADE: BELI MAKSIMAL (MAX)]"
+		} else {
+			g.notification = "[MODE UPGRADE: BELI 1x]"
+		}
+		g.notificationExpiry = time.Now().Add(2 * time.Second)
+	}
+
+	// Toggle Tema Warna UI dengan T (Berlaku Global)
+	if inpututil.IsKeyJustPressed(ebiten.KeyT) {
+		g.activeThemeIndex = (g.activeThemeIndex + 1) % len(g.themes)
+		g.notification = fmt.Sprintf("[TEMA WARNA UI AKTIF: %s]", g.themes[g.activeThemeIndex].Name)
+		g.notificationExpiry = time.Now().Add(2 * time.Second)
+	}
+
+	// Update Floating Texts
+	var activeTexts []FloatingText
+	now := time.Now()
+	for _, ft := range g.floatingTexts {
+		age := now.Sub(ft.createdAt)
+		if age < 800*time.Millisecond {
+			ft.y -= 0.6
+			ft.alpha = 1.0 - float32(age.Milliseconds())/800.0
+			activeTexts = append(activeTexts, ft)
+		}
+	}
+	g.floatingTexts = activeTexts
+
+	// Deteksi Penyelesaian Siklus Bisnis untuk Floating Text
+	businesses := g.engine.GetBusinesses()
+	if len(g.prevProgress) != len(businesses) {
+		g.prevProgress = make([]time.Duration, len(businesses))
+		for i, b := range businesses {
+			g.prevProgress[i] = b.GetProgress()
+		}
+	}
+	for i, b := range businesses {
+		currProg := b.GetProgress()
+		if b.IsOwned() && currProg < g.prevProgress[i] {
+			yPos := float32(88 + i*112 + 58)
+			g.spawnFloatingText(550, yPos, fmt.Sprintf("+%.2f Poin", b.Income()))
+		}
+		g.prevProgress[i] = currProg
 	}
 
 	// Navigasi perpindahan tab menggunakan tombol TAB
@@ -82,13 +192,25 @@ func (g *Game) Update() error {
 			g.engine.TriggerProduction(0)
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyQ) {
-			g.engine.BuyUpgrade(0)
+			if g.buyMaxMode {
+				g.engine.BuyUpgradeMax(0)
+			} else {
+				g.engine.BuyUpgrade(0)
+			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyW) {
-			g.engine.BuyUpgrade(1)
+			if g.buyMaxMode {
+				g.engine.BuyUpgradeMax(1)
+			} else {
+				g.engine.BuyUpgrade(1)
+			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyE) {
-			g.engine.BuyUpgrade(2)
+			if g.buyMaxMode {
+				g.engine.BuyUpgradeMax(2)
+			} else {
+				g.engine.BuyUpgrade(2)
+			}
 		}
 	}
 
@@ -114,6 +236,38 @@ func (g *Game) Update() error {
 			} else {
 				g.notification = fmt.Sprintf("[GAGAL MEMBELI %s (SALDO KURANG)]", upg.Name)
 				g.notificationExpiry = time.Now().Add(2 * time.Second)
+			}
+		}
+
+		// Pemicu Booster Sementara
+		if inpututil.IsKeyJustPressed(ebiten.KeyU) {
+			if g.engine.TriggerSuperBoost() {
+				g.notification = "[SUPER BOOST DIAKTIFKAN: KECEPATAN 2X!]"
+				g.notificationExpiry = time.Now().Add(2 * time.Second)
+			} else {
+				g.notification = "[GAGAL AKTIFKAN SUPER BOOST (BUTUH 50 POIN)]"
+				g.notificationExpiry = time.Now().Add(2 * time.Second)
+			}
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+			if g.engine.TriggerTimeWarp() {
+				g.notification = "[TIME WARP BERHASIL: INSTAN +1 JAM PENDAPATAN PASIF!]"
+				g.notificationExpiry = time.Now().Add(3 * time.Second)
+			} else {
+				hasAuto := false
+				for _, b := range g.engine.GetBusinesses() {
+					if b.IsOwned() && b.IsAutomated {
+						hasAuto = true
+						break
+					}
+				}
+				if !hasAuto {
+					g.notification = "[GAGAL: TIME WARP MEMBUTUHKAN MINIMAL 1 BISNIS OTOMATIS]"
+				} else {
+					g.notification = "[GAGAL TIME WARP (BUTUH 150 POIN)]"
+				}
+				g.notificationExpiry = time.Now().Add(3 * time.Second)
 			}
 		}
 	}
@@ -198,6 +352,16 @@ func (g *Game) Update() error {
 	return nil
 }
 
+func (g *Game) spawnFloatingText(x, y float32, text string) {
+	g.floatingTexts = append(g.floatingTexts, FloatingText{
+		x:         x,
+		y:         y,
+		text:      text,
+		alpha:     1.0,
+		createdAt: time.Now(),
+	})
+}
+
 func (g *Game) showTabChangeNotification() {
 	tabName := map[int]string{
 		0: "LIS LINI BISNIS",
@@ -212,33 +376,48 @@ func (g *Game) showTabChangeNotification() {
 
 // Draw menggambar representasi visual game ke layar.
 func (g *Game) Draw(screen *ebiten.Image) {
-	// Background color (Slate dark)
-	screen.Fill(color.RGBA{R: 30, G: 30, B: 46, A: 255})
+	theme := g.themes[g.activeThemeIndex]
+
+	// Background color dinamis sesuai tema aktif
+	screen.Fill(theme.BgColor)
 
 	wallet := g.engine.GetWallet()
 	balance := wallet.Balance()
 
 	// Header
 	ebitenutil.DebugPrintAt(screen, "=== IDLE ENGINE SANDBOX ===", 20, 12)
-	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("SALDO: %.2f POIN", balance), 20, 30)
+	boostDur := g.engine.GetBoostDuration()
+	var gpsStr string
+	if boostDur > 0 {
+		gpsStr = fmt.Sprintf("SALDO: %.2f POIN (+%.2f/dtk) [BOOST: %.1fs]", balance, g.engine.GetTotalGPS(), boostDur.Seconds())
+	} else {
+		gpsStr = fmt.Sprintf("SALDO: %.2f POIN (+%.2f/dtk)", balance, g.engine.GetTotalGPS())
+	}
+	ebitenutil.DebugPrintAt(screen, gpsStr, 20, 30)
+
+	modeStr := "MODE BELI: [1x] (Tekan [M] untuk Maks)"
+	if g.buyMaxMode {
+		modeStr = "MODE BELI: [MAKS] (Tekan [M] untuk 1x)"
+	}
+	ebitenutil.DebugPrintAt(screen, modeStr, 340, 30)
 
 	// Draw active notification if not expired
 	if time.Now().Before(g.notificationExpiry) && g.notification != "" {
 		ebitenutil.DebugPrintAt(screen, g.notification, 320, 12)
 	}
 
-	// Gambar Tab Header (5 Tab UI)
+	// Gambar Tab Header (5 Tab UI) dengan warna dinamis sesuai tema aktif
 	tabs := []struct {
 		tabIdx int
 		title  string
 		hotkey string
 		color  color.RGBA
 	}{
-		{0, " BISNIS", "F1", color.RGBA{R: 137, G: 180, B: 250, A: 255}}, // Blue
-		{1, "UPGRADE", "F2", color.RGBA{R: 166, G: 227, B: 161, A: 255}}, // Green
-		{2, "MANAGER", "F3", color.RGBA{R: 249, G: 226, B: 175, A: 255}}, // Yellow
-		{3, "ACHIEVE", "F4", color.RGBA{R: 245, G: 194, B: 231, A: 255}}, // Pink/Lavender
-		{4, "INVESTOR", "F5", color.RGBA{R: 250, G: 179, B: 135, A: 255}}, // Orange
+		{0, " BISNIS", "F1", theme.Blue},
+		{1, "UPGRADE", "F2", theme.Green},
+		{2, "MANAGER", "F3", theme.Yellow},
+		{3, "ACHIEVE", "F4", theme.Pink},
+		{4, "INVESTOR", "F5", theme.Orange},
 	}
 
 	for i, t := range tabs {
@@ -249,7 +428,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			bg = t.color
 			txt = fmt.Sprintf("*%s*", t.title)
 		} else {
-			bg = color.RGBA{R: 45, G: 45, B: 60, A: 255}
+			bg = theme.CardBg
 			txt = fmt.Sprintf("[%s]%s", t.hotkey, t.title)
 		}
 		vector.DrawFilledRect(screen, float32(x), 50, 84, 22, bg, false)
@@ -266,10 +445,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		for i, b := range businesses {
 			y := 88 + i*112
 
-			// Judul Bisnis & Level
+			// Judul Bisnis & Level dengan Target Milestones Kecepatan
 			var statusText string
 			if b.IsOwned() {
-				statusText = fmt.Sprintf("Lv. %d", b.GetLevel())
+				statusText = fmt.Sprintf("Lv. %d/%d (Akselerasi 2x)", b.GetLevel(), b.GetNextMilestone())
 			} else {
 				statusText = "Belum Dimiliki"
 			}
@@ -303,15 +482,24 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			}
 
 			if b.IsOwned() {
-				detailText = fmt.Sprintf("Penghasilan: %.2f Poin / %s", b.Income(), b.Duration)
+				detailText = fmt.Sprintf("Penghasilan: %.2f Poin / %s (+%.2f/dtk)", b.Income(), b.Duration, b.GetGPS())
 			} else {
 				detailText = fmt.Sprintf("Penghasilan Awal: %.2f Poin / %s", b.BaseIncome, b.Duration)
 			}
 
-			if b.IsAutomated {
-				actionText = fmt.Sprintf("Upgrade: Tekan [%s] (Biaya: %.2f) [%s] (Otomatis)", keyName, cost, costColor)
+			if g.buyMaxMode {
+				levels, totalCost := mathutil.CalculateMaxLevelsAffordable(b.BaseCost, b.CostMultiplier, b.GetLevel(), balance)
+				if levels > 0 {
+					actionText = fmt.Sprintf("Beli Maks: Tekan [%s] (Dapat +%d Level, Biaya: %.2f) [Bisa Beli]", keyName, levels, totalCost)
+				} else {
+					actionText = fmt.Sprintf("Beli Maks: Tekan [%s] (Biaya: %.2f) [Saldo Kurang]", keyName, cost)
+				}
 			} else {
-				actionText = fmt.Sprintf("Upgrade: Tekan [%s] (Biaya: %.2f) [%s] | Mulai: Tekan [%d]", keyName, cost, costColor, i+1)
+				if b.IsAutomated {
+					actionText = fmt.Sprintf("Upgrade: Tekan [%s] (Biaya: %.2f) [%s] (Otomatis)", keyName, cost, costColor)
+				} else {
+					actionText = fmt.Sprintf("Upgrade: Tekan [%s] (Biaya: %.2f) [%s] | Mulai: Tekan [%d]", keyName, cost, costColor, i+1)
+				}
 			}
 
 			ebitenutil.DebugPrintAt(screen, detailText, 20, y+20)
@@ -323,17 +511,17 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			barW := 600
 			barH := 12
 
-			// Background Progress Bar (grayish-blue)
-			vector.DrawFilledRect(screen, float32(barX), float32(barY), float32(barW), float32(barH), color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+			// Background Progress Bar (grayish-blue) dari tema aktif
+			vector.DrawFilledRect(screen, float32(barX), float32(barY), float32(barW), float32(barH), theme.CardBg, false)
 
 			// Fill Progress Bar
 			pct := b.GetProgressPercent()
 			if pct > 0 {
 				var barColor color.RGBA
 				if b.IsAutomated {
-					barColor = color.RGBA{R: 166, G: 227, B: 161, A: 255} // Pastel Green
+					barColor = theme.Green
 				} else {
-					barColor = color.RGBA{R: 137, G: 180, B: 250, A: 255} // Pastel Blue
+					barColor = theme.Blue
 				}
 				vector.DrawFilledRect(screen, float32(barX), float32(barY), float32(float64(barW)*pct), float32(barH), barColor, false)
 			}
@@ -344,12 +532,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// TAB 2: UPGRADE
 	if g.activeTab == 1 {
+		// 1. Upgrade Cards di Sisi Kiri (x=20 sampai x=400)
 		upgrades := g.engine.GetUpgrades()
 		for i, upg := range upgrades {
 			y := 88 + i*108
 
-			// Draw card background (box)
-			vector.DrawFilledRect(screen, 20, float32(y), 600, 95, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+			// Draw card background (box lebar 380) dari tema aktif
+			vector.DrawFilledRect(screen, 20, float32(y), 380, 95, theme.CardBg, false)
 
 			titleText := fmt.Sprintf("[%d] %s", i+1, upg.Name)
 			if upg.IsPurchased {
@@ -367,12 +556,37 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				if canAfford {
 					statusColor = "Bisa Beli"
 				}
-				actionText = fmt.Sprintf("Beli: Tekan [%d] / [%s] (Biaya: %.2f) [%s]", i+1, map[int]string{0: "Q", 1: "W", 2: "E"}[i], upg.Cost, statusColor)
+				actionText = fmt.Sprintf("Beli: Tekan [%s] (Biaya: %.2f) [%s]", map[int]string{0: "Q", 1: "W", 2: "E"}[i], upg.Cost, statusColor)
 			}
 			ebitenutil.DebugPrintAt(screen, actionText, 35, y+55)
 		}
 
-		ebitenutil.DebugPrintAt(screen, "Petunjuk: Peningkatan memodifikasi pendapatan atau kecepatan produksi lini bisnis terkait.", 20, 422)
+		ebitenutil.DebugPrintAt(screen, "Petunjuk: Peningkatan memodifikasi multiplier permanen.", 20, 422)
+
+		// 2. Toko Booster Sementara di Sisi Kanan (x=420 sampai x=620)
+		ebitenutil.DebugPrintAt(screen, "=== TOKO BOOSTER SEMENTARA ===", 420, 88)
+
+		// Kartu Super Boost (y=110)
+		vector.DrawFilledRect(screen, 420, 110, 200, 100, theme.CardBg, false)
+		ebitenutil.DebugPrintAt(screen, "[U] SUPER BOOST", 435, 120)
+		ebitenutil.DebugPrintAt(screen, "2x Kecepatan (30s)", 435, 140)
+		ebitenutil.DebugPrintAt(screen, "Biaya: 50.00 Poin", 435, 160)
+		boostStatus := "[Saldo Kurang]"
+		if wallet.CanAfford(50.0) {
+			boostStatus = "[Bisa Beli]"
+		}
+		ebitenutil.DebugPrintAt(screen, boostStatus, 435, 180)
+
+		// Kartu Time Warp (y=230)
+		vector.DrawFilledRect(screen, 420, 230, 200, 100, theme.CardBg, false)
+		ebitenutil.DebugPrintAt(screen, "[I] TIME WARP", 435, 240)
+		ebitenutil.DebugPrintAt(screen, "Instan +1 Jam Otomatis", 435, 260)
+		ebitenutil.DebugPrintAt(screen, "Biaya: 150.00 Poin", 435, 280)
+		warpStatus := "[Saldo Kurang]"
+		if wallet.CanAfford(150.0) {
+			warpStatus = "[Bisa Beli]"
+		}
+		ebitenutil.DebugPrintAt(screen, warpStatus, 435, 300)
 	}
 
 	// TAB 3: MANAGER
@@ -381,8 +595,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		for i, m := range managers {
 			y := 88 + i*108
 
-			// Draw card background (box)
-			vector.DrawFilledRect(screen, 20, float32(y), 600, 95, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+			// Draw card background (box) dari tema aktif
+			vector.DrawFilledRect(screen, 20, float32(y), 600, 95, theme.CardBg, false)
 
 			titleText := fmt.Sprintf("[%d] %s", i+1, m.Name)
 			if m.IsHired {
@@ -414,12 +628,17 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		for i, ach := range achievements {
 			y := 88 + i*108
 
-			// Draw card background (box)
+			// Draw card background (box) dari tema aktif
 			var boxColor color.RGBA
 			if ach.IsUnlocked {
-				boxColor = color.RGBA{R: 50, G: 70, B: 60, A: 255} // Light green tint box for unlocked
+				boxColor = color.RGBA{
+					R: uint8(float64(theme.Green.R)*0.4 + float64(theme.CardBg.R)*0.6),
+					G: uint8(float64(theme.Green.G)*0.4 + float64(theme.CardBg.G)*0.6),
+					B: uint8(float64(theme.Green.B)*0.4 + float64(theme.CardBg.B)*0.6),
+					A: 255,
+				}
 			} else {
-				boxColor = color.RGBA{R: 45, G: 45, B: 60, A: 255} // Dark gray box for locked
+				boxColor = theme.CardBg
 			}
 			vector.DrawFilledRect(screen, 20, float32(y), 600, 95, boxColor, false)
 
@@ -450,15 +669,15 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		angels := g.engine.GetAngels()
 		claimable := g.engine.CalculateAngelsToClaim()
 
-		// 1. Statistik Card
-		vector.DrawFilledRect(screen, 20, 88, 600, 110, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		// 1. Statistik Card dari tema aktif
+		vector.DrawFilledRect(screen, 20, 88, 600, 110, theme.CardBg, false)
 		ebitenutil.DebugPrintAt(screen, "STATISTIK SEPANJANG MASA (LIFETIME STATS):", 35, 98)
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Total Akumulasi Pendapatan : %.2f Poin", lifetime), 35, 120)
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Angel Investors Dimiliki  : %d Investor", angels), 35, 142)
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Bonus Pengali Pendapatan  : +%d%% Pendapatan (Global)", angels*5), 35, 164)
 
-		// 2. Prestige Card
-		vector.DrawFilledRect(screen, 20, 218, 600, 130, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		// 2. Prestige Card dari tema aktif
+		vector.DrawFilledRect(screen, 20, 218, 600, 130, theme.CardBg, false)
 		ebitenutil.DebugPrintAt(screen, "RESET PRESTIS (INVESTASI MALAIKAT):", 35, 228)
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Investor Baru untuk Diklaim : +%d Investor", claimable), 35, 250)
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Efek Bonus Setelah Klaim    : +%d%% Pendapatan (Global)", (angels+claimable)*5), 35, 272)
@@ -478,8 +697,18 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		ebitenutil.DebugPrintAt(screen, "Namun, Angel Investors memberikan +5% pendapatan permanen global. Pencapaian tidak direset.", 20, 385)
 	}
 
-	// Footer (Global)
-	ebitenutil.DebugPrintAt(screen, "Fitur: [S] Simpan Manual | [L] Muat Manual | Auto-save aktif (5s)", 20, 445)
+	// Footer (Global) & Banner Event Acak Aktif
+	activeEvt, eventDur := g.engine.GetActiveEvent()
+	if activeEvt != nil {
+		eventStr := fmt.Sprintf("[BERITA SELA] %s: %s (Sisa %.1fs)", activeEvt.Title, activeEvt.Description, eventDur.Seconds())
+		ebitenutil.DebugPrintAt(screen, eventStr, 20, 435)
+	}
+	ebitenutil.DebugPrintAt(screen, "Fitur: [S] Simpan Manual | [L] Muat Manual | Auto-save aktif (5s)", 20, 455)
+
+	// Render Floating Texts
+	for _, ft := range g.floatingTexts {
+		ebitenutil.DebugPrintAt(screen, ft.text, int(ft.x), int(ft.y))
+	}
 }
 
 // Layout mengembalikan ukuran layar game.

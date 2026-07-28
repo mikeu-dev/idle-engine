@@ -66,6 +66,24 @@ func (b *Business) Upgrade() {
 	}
 }
 
+// UpgradeMany meningkatkan level bisnis sebanyak beberapa tingkatan sekaligus.
+func (b *Business) UpgradeMany(levels int) {
+	if levels <= 0 {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	
+	hadZeroLevel := (b.Level == 0)
+	b.Level += levels
+	
+	// Jika otomatis dan baru dibeli pertama kali, langsung aktifkan produksi
+	if hadZeroLevel && b.Level >= 1 && b.IsAutomated {
+		b.IsActive = true
+		b.Progress = 0
+	}
+}
+
 // StartProduction memulai siklus produksi untuk bisnis manual.
 func (b *Business) StartProduction() bool {
 	b.mu.Lock()
@@ -93,10 +111,11 @@ func (b *Business) Update(delta time.Duration) float64 {
 	revenue := 0.0
 	b.Progress += delta
 
-	// Hitung durasi aktif berdasarkan speedMultiplier
+	// Hitung durasi aktif berdasarkan speedMultiplier dan milestone speedup
+	speedMultiplierTotal := b.speedMultiplier * b.getMilestoneSpeedMultiplier()
 	activeDuration := b.Duration
-	if b.speedMultiplier > 0 {
-		activeDuration = time.Duration(float64(b.Duration) / b.speedMultiplier)
+	if speedMultiplierTotal > 0 {
+		activeDuration = time.Duration(float64(b.Duration) / speedMultiplierTotal)
 	}
 	if activeDuration == 0 {
 		activeDuration = time.Nanosecond
@@ -208,5 +227,51 @@ func (b *Business) SetAutomated(automated bool) {
 		b.IsActive = true
 		b.Progress = 0
 	}
+}
+
+// GetGPS mengembalikan proyeksi pendapatan per detik (GPS) dari bisnis ini dengan memperhitungkan akselerasi milestone.
+func (b *Business) GetGPS() float64 {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if b.Level == 0 {
+		return 0
+	}
+	speedMultiplierTotal := b.speedMultiplier * b.getMilestoneSpeedMultiplier()
+	activeDuration := b.Duration
+	if speedMultiplierTotal > 0 {
+		activeDuration = time.Duration(float64(b.Duration) / speedMultiplierTotal)
+	}
+	if activeDuration.Seconds() <= 0 {
+		return 0
+	}
+	return (b.BaseIncome * float64(b.Level) * b.revenueMultiplier) / activeDuration.Seconds()
+}
+
+// getMilestoneSpeedMultiplier menghitung multiplier kecepatan tambahan dari pencapaian milestone level.
+// Setiap milestone yang dicapai mengalikan kecepatan produksi dengan 2.
+// Catatan: Pemanggil harus menahan RLock atau Lock pada b.mu.
+func (b *Business) getMilestoneSpeedMultiplier() float64 {
+	milestones := []int{25, 50, 100, 250, 500, 1000, 2500, 5000}
+	mult := 1.0
+	for _, m := range milestones {
+		if b.Level >= m {
+			mult *= 2.0
+		}
+	}
+	return mult
+}
+
+// GetNextMilestone mengembalikan target level milestone berikutnya berdasarkan level saat ini secara thread-safe.
+func (b *Business) GetNextMilestone() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	milestones := []int{25, 50, 100, 250, 500, 1000, 2500, 5000}
+	for _, m := range milestones {
+		if b.Level < m {
+			return m
+		}
+	}
+	// Jika level melebihi milestone terbesar, target berikutnya kelipatan 5000
+	return ((b.Level / 5000) + 1) * 5000
 }
 

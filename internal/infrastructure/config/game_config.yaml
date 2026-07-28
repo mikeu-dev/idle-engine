@@ -1,0 +1,75 @@
+businesses:
+  - id: lemonade
+    name: Lemonade Stand
+    base_cost: 4.0
+    cost_multiplier: 1.15
+    base_income: 1.0
+    duration_ms: 1000
+    is_automated: false
+  - id: newspaper
+    name: Newspaper Route
+    base_cost: 20.0
+    cost_multiplier: 1.15
+    base_income: 4.0
+    duration_ms: 3000
+    is_automated: true
+  - id: carwash
+    name: Car Wash
+    base_cost: 100.0
+    cost_multiplier: 1.15
+    base_income: 20.0
+    duration_ms: 6000
+    is_automated: true
+
+upgrades:
+  - id: lemon_pitcher
+    name: Lemon Pitcher
+    description: Lemonade Stand 2x Pendapatan
+    cost: 15.0
+    target_business_id: lemonade
+    revenue_multiplier: 2.0
+    speed_multiplier: 1.0
+  - id: newspaper_bag
+    name: Newspaper Bag
+    description: Newspaper Route 2x Kecepatan
+    cost: 50.0
+    target_business_id: newspaper
+    revenue_multiplier: 1.0
+    speed_multiplier: 2.0
+  - id: power_washer
+    name: Power Washer
+    description: Car Wash 3x Pendapatan
+    cost: 250.0
+    target_business_id: carwash
+    revenue_multiplier: 3.0
+    speed_multiplier: 1.0
+
+managers:
+  - id: lemonade_mgr
+    name: Lemonade Manager
+    description: Mengotomatiskan Lemonade Stand secara permanen
+    cost: 100.0
+    target_business_id: lemonade
+
+achievements:
+  - id: pts_100
+    name: Poin Pemula
+    description: Kumpulkan 100 Poin (Bonus +10% pendapatan global)
+    condition_type: balance
+    target_business_id: ""
+    target_value: 100.0
+    bonus_multiplier: 0.10
+  - id: lemon_10
+    name: Lemonade Tycoon
+    description: Lemonade Stand Level 10 (Bonus +20% pendapatan Lemonade)
+    condition_type: level
+    target_business_id: lemonade
+    target_value: 10.0
+    bonus_multiplier: 0.20
+  - id: news_10
+    name: Newspaper Tycoon
+    description: Newspaper Route Level 10 (Bonus +20% pendapatan Newspaper)
+    condition_type: level
+    target_business_id: newspaper
+    target_value: 10.0
+    bonus_multiplier: 0.20
