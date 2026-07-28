@@ -16,18 +16,31 @@ import (
 	"time"
 )
 
+// RandomEvent merepresentasikan peristiwa ekonomi acak berdurasi singkat.
+type RandomEvent struct {
+	ID          string
+	Title       string
+	Description string
+	TargetBizID string // Jika kosong (""), berarti global
+	EffectType  string // "revenue" atau "speed"
+	Multiplier  float64
+}
+
 // Engine merepresentasikan orchestrator logika utama permainan.
 type Engine struct {
-	mu               sync.RWMutex
-	wallet           *economy.Wallet
-	businesses       []*business.Business
-	upgrades         []*upgrade.Upgrade
-	managers         []*manager.Manager
-	achievements     []*event.Achievement
-	lifetimeEarnings float64
-	angels           int
-	boostDuration    time.Duration
-	lastTick         time.Time
+	mu                      sync.RWMutex
+	wallet                  *economy.Wallet
+	businesses              []*business.Business
+	upgrades                []*upgrade.Upgrade
+	managers                []*manager.Manager
+	achievements            []*event.Achievement
+	lifetimeEarnings        float64
+	angels                  int
+	boostDuration           time.Duration
+	activeEvent             *RandomEvent
+	eventDuration           time.Duration
+	timeSinceLastEventCheck time.Duration
+	lastTick                time.Time
 }
 
 // NewEngineWithConfig membuat instance Engine baru berdasarkan berkas konfigurasi YAML di cfgPath.
@@ -109,15 +122,18 @@ func NewEngineWithConfig(cfgPath string) *Engine {
 	}
 
 	return &Engine{
-		wallet:           wallet,
-		businesses:       businesses,
-		upgrades:         upgrades,
-		managers:         managers,
-		achievements:     achievements,
-		lifetimeEarnings: 4.0,
-		angels:           0,
-		boostDuration:    0,
-		lastTick:         time.Now(),
+		wallet:                  wallet,
+		businesses:              businesses,
+		upgrades:                upgrades,
+		managers:                managers,
+		achievements:            achievements,
+		lifetimeEarnings:        4.0,
+		angels:                  0,
+		boostDuration:           0,
+		activeEvent:             nil,
+		eventDuration:           0,
+		timeSinceLastEventCheck: 0,
+		lastTick:                time.Now(),
 	}
 }
 
@@ -141,6 +157,24 @@ func (e *Engine) Update() {
 		if e.boostDuration <= 0 {
 			e.boostDuration = 0
 			e.applyModifiers() // Hitung ulang modifiers karena boost habis
+		}
+	}
+
+	// Update sisa durasi Event Acak jika ada
+	if e.activeEvent != nil {
+		e.eventDuration -= delta
+		if e.eventDuration <= 0 {
+			e.activeEvent = nil
+			e.eventDuration = 0
+			e.applyModifiers() // Kembalikan multiplier normal
+		}
+	} else {
+		e.timeSinceLastEventCheck += delta
+		if e.timeSinceLastEventCheck >= 45*time.Second {
+			e.timeSinceLastEventCheck = 0
+			if time.Now().UnixNano()%2 == 0 {
+				e.triggerRandomEvent()
+			}
 		}
 	}
 
@@ -256,6 +290,109 @@ func (e *Engine) TriggerTimeWarp() bool {
 	}
 	return false
 }
+
+// GetActiveEvent mengembalikan event acak aktif saat ini beserta sisa durasinya secara thread-safe.
+func (e *Engine) GetActiveEvent() (*RandomEvent, time.Duration) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.activeEvent, e.eventDuration
+}
+
+// TriggerEventByID memicu event acak tertentu berdasarkan ID secara instan untuk kebutuhan pengujian unit test.
+func (e *Engine) TriggerEventByID(id string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	events := map[string]*RandomEvent{
+		"summer": {
+			ID:          "summer",
+			Title:       "Musim Panas Terik",
+			Description: "Pendapatan Lemonade Stand naik 3x!",
+			TargetBizID: "lemonade",
+			EffectType:  "revenue",
+			Multiplier:  3.0,
+		},
+		"paper_day": {
+			ID:          "paper_day",
+			Title:       "Hari Loper Koran",
+			Description: "Kecepatan Newspaper Route naik 2x!",
+			TargetBizID: "newspaper",
+			EffectType:  "speed",
+			Multiplier:  2.0,
+		},
+		"rain_storm": {
+			ID:          "rain_storm",
+			Title:       "Hujan Badai Berlumpur",
+			Description: "Pendapatan Car Wash naik 4x!",
+			TargetBizID: "carwash",
+			EffectType:  "revenue",
+			Multiplier:  4.0,
+		},
+		"power_outage": {
+			ID:          "power_outage",
+			Title:       "Krisis Listrik Kota",
+			Description: "Kecepatan seluruh bisnis turun menjadi 0.5x!",
+			TargetBizID: "",
+			EffectType:  "speed",
+			Multiplier:  0.5,
+		},
+	}
+
+	evt, exists := events[id]
+	if !exists {
+		return false
+	}
+
+	e.activeEvent = evt
+	e.eventDuration = 30 * time.Second
+	e.applyModifiers()
+	return true
+}
+
+// triggerRandomEvent memicu salah satu event acak secara acak berdurasi 30 detik.
+// Catatan: Pemanggil harus menahan Lock mu.
+func (e *Engine) triggerRandomEvent() {
+	events := []*RandomEvent{
+		{
+			ID:          "summer",
+			Title:       "Musim Panas Terik",
+			Description: "Pendapatan Lemonade Stand naik 3x!",
+			TargetBizID: "lemonade",
+			EffectType:  "revenue",
+			Multiplier:  3.0,
+		},
+		{
+			ID:          "paper_day",
+			Title:       "Hari Loper Koran",
+			Description: "Kecepatan Newspaper Route naik 2x!",
+			TargetBizID: "newspaper",
+			EffectType:  "speed",
+			Multiplier:  2.0,
+		},
+		{
+			ID:          "rain_storm",
+			Title:       "Hujan Badai Berlumpur",
+			Description: "Pendapatan Car Wash naik 4x!",
+			TargetBizID: "carwash",
+			EffectType:  "revenue",
+			Multiplier:  4.0,
+		},
+		{
+			ID:          "power_outage",
+			Title:       "Krisis Listrik Kota",
+			Description: "Kecepatan seluruh bisnis turun menjadi 0.5x!",
+			TargetBizID: "",
+			EffectType:  "speed",
+			Multiplier:  0.5,
+		},
+	}
+
+	idx := int(time.Now().UnixNano() % int64(len(events)))
+	e.activeEvent = events[idx]
+	e.eventDuration = 30 * time.Second
+	e.applyModifiers()
+}
+
 
 // CalculateAngelsToClaim menghitung berapa banyak investor yang bisa diperoleh jika mereset progres sekarang.
 func (e *Engine) CalculateAngelsToClaim() int {
@@ -466,6 +603,28 @@ func (e *Engine) applyModifiers() {
 	boostMult := 1.0
 	if e.boostDuration > 0 {
 		boostMult = 2.0
+	}
+
+	// 5. Terapkan Event Acak jika ada yang aktif
+	if e.activeEvent != nil {
+		evt := e.activeEvent
+		if evt.EffectType == "revenue" {
+			if evt.TargetBizID == "" {
+				for _, b := range e.businesses {
+					revMults[b.ID] *= evt.Multiplier
+				}
+			} else {
+				revMults[evt.TargetBizID] *= evt.Multiplier
+			}
+		} else if evt.EffectType == "speed" {
+			if evt.TargetBizID == "" {
+				for _, b := range e.businesses {
+					speedMults[b.ID] *= evt.Multiplier
+				}
+			} else {
+				speedMults[evt.TargetBizID] *= evt.Multiplier
+			}
+		}
 	}
 
 	// Terapkan ke masing-masing bisnis

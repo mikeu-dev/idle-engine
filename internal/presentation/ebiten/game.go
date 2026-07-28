@@ -474,12 +474,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// TAB 2: UPGRADE
 	if g.activeTab == 1 {
+		// 1. Upgrade Cards di Sisi Kiri (x=20 sampai x=400)
 		upgrades := g.engine.GetUpgrades()
 		for i, upg := range upgrades {
 			y := 88 + i*108
 
-			// Draw card background (box)
-			vector.DrawFilledRect(screen, 20, float32(y), 600, 95, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+			// Draw card background (box lebar 380)
+			vector.DrawFilledRect(screen, 20, float32(y), 380, 95, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
 
 			titleText := fmt.Sprintf("[%d] %s", i+1, upg.Name)
 			if upg.IsPurchased {
@@ -497,35 +498,37 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				if canAfford {
 					statusColor = "Bisa Beli"
 				}
-				actionText = fmt.Sprintf("Beli: Tekan [%d] / [%s] (Biaya: %.2f) [%s]", i+1, map[int]string{0: "Q", 1: "W", 2: "E"}[i], upg.Cost, statusColor)
+				actionText = fmt.Sprintf("Beli: Tekan [%s] (Biaya: %.2f) [%s]", map[int]string{0: "Q", 1: "W", 2: "E"}[i], upg.Cost, statusColor)
 			}
 			ebitenutil.DebugPrintAt(screen, actionText, 35, y+55)
 		}
 
-		// Toko Booster Sementara
-		ebitenutil.DebugPrintAt(screen, "=== TOKO BOOSTER SEMENTARA ===", 20, 415)
+		ebitenutil.DebugPrintAt(screen, "Petunjuk: Peningkatan memodifikasi multiplier permanen.", 20, 422)
 
-		// 1. Kartu Super Boost
-		vector.DrawFilledRect(screen, 20, 435, 290, 80, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
-		ebitenutil.DebugPrintAt(screen, "[U] SUPER BOOST", 35, 445)
-		ebitenutil.DebugPrintAt(screen, "2x Kecepatan (30s)", 35, 465)
-		boostCostAfford := "Bisa Beli"
-		if !wallet.CanAfford(50.0) {
-			boostCostAfford = "Saldo Kurang"
+		// 2. Toko Booster Sementara di Sisi Kanan (x=420 sampai x=620)
+		ebitenutil.DebugPrintAt(screen, "=== TOKO BOOSTER SEMENTARA ===", 420, 88)
+
+		// Kartu Super Boost (y=110)
+		vector.DrawFilledRect(screen, 420, 110, 200, 100, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		ebitenutil.DebugPrintAt(screen, "[U] SUPER BOOST", 435, 120)
+		ebitenutil.DebugPrintAt(screen, "2x Kecepatan (30s)", 435, 140)
+		ebitenutil.DebugPrintAt(screen, "Biaya: 50.00 Poin", 435, 160)
+		boostStatus := "[Saldo Kurang]"
+		if wallet.CanAfford(50.0) {
+			boostStatus = "[Bisa Beli]"
 		}
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Biaya: 50.00 Poin (%s)", boostCostAfford), 35, 485)
+		ebitenutil.DebugPrintAt(screen, boostStatus, 435, 180)
 
-		// 2. Kartu Time Warp
-		vector.DrawFilledRect(screen, 330, 435, 290, 80, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
-		ebitenutil.DebugPrintAt(screen, "[I] TIME WARP", 345, 445)
-		ebitenutil.DebugPrintAt(screen, "Instan +1 Jam Otomatis", 345, 465)
-		warpCostAfford := "Bisa Beli"
-		if !wallet.CanAfford(150.0) {
-			warpCostAfford = "Saldo Kurang"
+		// Kartu Time Warp (y=230)
+		vector.DrawFilledRect(screen, 420, 230, 200, 100, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		ebitenutil.DebugPrintAt(screen, "[I] TIME WARP", 435, 240)
+		ebitenutil.DebugPrintAt(screen, "Instan +1 Jam Otomatis", 435, 260)
+		ebitenutil.DebugPrintAt(screen, "Biaya: 150.00 Poin", 435, 280)
+		warpStatus := "[Saldo Kurang]"
+		if wallet.CanAfford(150.0) {
+			warpStatus = "[Bisa Beli]"
 		}
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Biaya: 150.00 Poin (%s)", warpCostAfford), 345, 485)
-
-		ebitenutil.DebugPrintAt(screen, "Petunjuk: Peningkatan memodifikasi multiplier permanen. Booster memberikan efek aktif sementara.", 20, 525)
+		ebitenutil.DebugPrintAt(screen, warpStatus, 435, 300)
 	}
 
 	// TAB 3: MANAGER
@@ -631,8 +634,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		ebitenutil.DebugPrintAt(screen, "Namun, Angel Investors memberikan +5% pendapatan permanen global. Pencapaian tidak direset.", 20, 385)
 	}
 
-	// Footer (Global)
-	ebitenutil.DebugPrintAt(screen, "Fitur: [S] Simpan Manual | [L] Muat Manual | Auto-save aktif (5s)", 20, 445)
+	// Footer (Global) & Banner Event Acak Aktif
+	activeEvt, eventDur := g.engine.GetActiveEvent()
+	if activeEvt != nil {
+		eventStr := fmt.Sprintf("[BERITA SELA] %s: %s (Sisa %.1fs)", activeEvt.Title, activeEvt.Description, eventDur.Seconds())
+		ebitenutil.DebugPrintAt(screen, eventStr, 20, 435)
+	}
+	ebitenutil.DebugPrintAt(screen, "Fitur: [S] Simpan Manual | [L] Muat Manual | Auto-save aktif (5s)", 20, 455)
 
 	// Render Floating Texts
 	for _, ft := range g.floatingTexts {
