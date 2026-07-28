@@ -4,6 +4,8 @@ import (
 	"idle-engine/internal/core/save"
 	"idle-engine/internal/domain/business"
 	"idle-engine/internal/domain/economy"
+	"idle-engine/internal/domain/modifier"
+	"idle-engine/internal/domain/upgrade"
 	"sync"
 	"time"
 )
@@ -13,10 +15,11 @@ type Engine struct {
 	mu         sync.RWMutex
 	wallet     *economy.Wallet
 	businesses []*business.Business
+	upgrades   []*upgrade.Upgrade
 	lastTick   time.Time
 }
 
-// NewEngine membuat instance Engine baru dengan setup bisnis awal.
+// NewEngine membuat instance Engine baru dengan setup bisnis awal dan upgrade card.
 func NewEngine() *Engine {
 	// Buat wallet dengan modal awal 4 poin agar bisa beli Lemonade Stand segera
 	wallet := economy.NewWallet(4.0)
@@ -31,9 +34,17 @@ func NewEngine() *Engine {
 		business.NewBusiness("carwash", "Car Wash", 100.0, 1.15, 20.0, 6*time.Second, true),
 	}
 
+	// Setup item upgrade bawaan
+	upgrades := []*upgrade.Upgrade{
+		upgrade.NewUpgrade("lemon_pitcher", "Lemon Pitcher", "Lemonade Stand 2x Pendapatan", 15.0, "lemonade", modifier.NewModifier(2.0, 1.0)),
+		upgrade.NewUpgrade("newspaper_bag", "Newspaper Bag", "Newspaper Route 2x Kecepatan", 50.0, "newspaper", modifier.NewModifier(1.0, 2.0)),
+		upgrade.NewUpgrade("power_washer", "Power Washer", "Car Wash 3x Pendapatan", 250.0, "carwash", modifier.NewModifier(3.0, 1.0)),
+	}
+
 	return &Engine{
 		wallet:     wallet,
 		businesses: businesses,
+		upgrades:   upgrades,
 		lastTick:   time.Now(),
 	}
 }
@@ -73,6 +84,13 @@ func (e *Engine) GetBusinesses() []*business.Business {
 	return e.businesses
 }
 
+// GetUpgrades mengembalikan daftar semua upgrade.
+func (e *Engine) GetUpgrades() []*upgrade.Upgrade {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.upgrades
+}
+
 // BuyUpgrade membeli atau menaikkan level bisnis tertentu jika saldo mencukupi.
 func (e *Engine) BuyUpgrade(idx int) bool {
 	e.mu.Lock()
@@ -91,6 +109,53 @@ func (e *Engine) BuyUpgrade(idx int) bool {
 		return true
 	}
 	return false
+}
+
+// BuyUpgradeCard membeli item upgrade tertentu berdasarkan indeks jika saldo mencukupi.
+func (e *Engine) BuyUpgradeCard(idx int) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if idx < 0 || idx >= len(e.upgrades) {
+		return false
+	}
+
+	upg := e.upgrades[idx]
+	if upg.IsPurchased {
+		return false
+	}
+
+	if e.wallet.Spend(upg.Cost) {
+		upg.Purchase()
+		e.applyModifiers() // Hitung ulang modifiers bisnis setelah ada upgrade baru
+		return true
+	}
+	return false
+}
+
+// applyModifiers menghitung ulang dan menerapkan modifier dari upgrade yang dibeli ke setiap bisnis.
+// Catatan: Pemanggil harus menahan lock mu.
+func (e *Engine) applyModifiers() {
+	revMults := make(map[string]float64)
+	speedMults := make(map[string]float64)
+
+	for _, b := range e.businesses {
+		revMults[b.ID] = 1.0
+		speedMults[b.ID] = 1.0
+	}
+
+	// Akumulasikan efek dari upgrade yang telah dibeli
+	for _, upg := range e.upgrades {
+		if upg.IsPurchased {
+			revMults[upg.TargetBusinessID] *= upg.Effect.RevenueMultiplier
+			speedMults[upg.TargetBusinessID] *= upg.Effect.SpeedMultiplier
+		}
+	}
+
+	// Terapkan ke masing-masing bisnis
+	for _, b := range e.businesses {
+		b.SetModifiers(revMults[b.ID], speedMults[b.ID])
+	}
 }
 
 // TriggerProduction memicu manual start produksi untuk bisnis non-otomatis.
@@ -120,9 +185,17 @@ func (e *Engine) ExportState() *save.SaveState {
 		}
 	}
 
+	var purchasedUpgrades []string
+	for _, upg := range e.upgrades {
+		if upg.IsPurchased {
+			purchasedUpgrades = append(purchasedUpgrades, upg.ID)
+		}
+	}
+
 	return &save.SaveState{
 		Balance:    e.wallet.Balance(),
 		Businesses: bizStates,
+		Upgrades:   purchasedUpgrades,
 		Timestamp:  time.Now(),
 	}
 }
@@ -148,7 +221,19 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 		}
 	}
 
-	// 3. Hitung pendapatan offline (maksimal 12 jam)
+	// 3. Pulihkan state upgrade
+	purchasedMap := make(map[string]bool)
+	for _, id := range state.Upgrades {
+		purchasedMap[id] = true
+	}
+	for _, upg := range e.upgrades {
+		upg.IsPurchased = purchasedMap[upg.ID]
+	}
+
+	// 4. Hitung ulang modifiers
+	e.applyModifiers()
+
+	// 5. Hitung pendapatan offline (maksimal 12 jam)
 	now := time.Now()
 	offlineDuration := now.Sub(state.Timestamp)
 
@@ -173,5 +258,6 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 
 	return offlineRevenue
 }
+
 
 
