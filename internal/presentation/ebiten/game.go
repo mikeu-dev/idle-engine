@@ -15,11 +15,13 @@ import (
 
 // Game mengimplementasikan interface ebiten.Game.
 type Game struct {
-	engine             *engine.Engine
-	lastAutoSave       time.Time
-	notification       string
-	notificationExpiry time.Time
-	activeTab          int // 0: Bisnis, 1: Upgrade, 2: Manager, 3: Achievements
+	engine                *engine.Engine
+	lastAutoSave          time.Time
+	notification          string
+	notificationExpiry    time.Time
+	activeTab             int // 0: Bisnis, 1: Upgrade, 2: Manager, 3: Achievements, 4: Investor
+	prestigeConfirm       bool
+	prestigeConfirmExpiry time.Time
 }
 
 // NewGame membuat instance Game baru dengan engine yang diberikan.
@@ -41,13 +43,18 @@ func (g *Game) SetOfflineNotification(revenue float64) {
 func (g *Game) Update() error {
 	g.engine.Update()
 
+	// Reset prestige confirm state jika sudah kedaluwarsa
+	if g.prestigeConfirm && time.Now().After(g.prestigeConfirmExpiry) {
+		g.prestigeConfirm = false
+	}
+
 	// Navigasi perpindahan tab menggunakan tombol TAB
 	if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
-		g.activeTab = (g.activeTab + 1) % 4
+		g.activeTab = (g.activeTab + 1) % 5
 		g.showTabChangeNotification()
 	}
 
-	// Navigasi perpindahan tab menggunakan F1-F4 secara langsung
+	// Navigasi perpindahan tab menggunakan F1-F5 secara langsung
 	if inpututil.IsKeyJustPressed(ebiten.KeyF1) {
 		g.activeTab = 0
 		g.showTabChangeNotification()
@@ -62,6 +69,10 @@ func (g *Game) Update() error {
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyF4) {
 		g.activeTab = 3
+		g.showTabChangeNotification()
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyF5) {
+		g.activeTab = 4
 		g.showTabChangeNotification()
 	}
 
@@ -129,6 +140,31 @@ func (g *Game) Update() error {
 		}
 	}
 
+	// Kontrol Hotkey Tab Investor / Prestige (activeTab == 4)
+	if g.activeTab == 4 {
+		if inpututil.IsKeyJustPressed(ebiten.KeyR) {
+			claimable := g.engine.CalculateAngelsToClaim()
+			if claimable <= 0 {
+				g.notification = "[BELUM BISA PRESTIGE (TIDAK ADA INVESTOR UNTUK DIKLAIM)]"
+				g.notificationExpiry = time.Now().Add(3 * time.Second)
+				g.prestigeConfirm = false
+			} else if g.prestigeConfirm && time.Now().Before(g.prestigeConfirmExpiry) {
+				// Jalankan reset dan klaim
+				if g.engine.ClaimPrestige() {
+					g.notification = "[PRESTIGE BERHASIL! PROGRES DIRESET DENGAN BONUS INVESTOR BARU]"
+					g.notificationExpiry = time.Now().Add(4 * time.Second)
+				}
+				g.prestigeConfirm = false
+			} else {
+				// Memasuki status konfirmasi
+				g.prestigeConfirm = true
+				g.prestigeConfirmExpiry = time.Now().Add(4 * time.Second)
+				g.notification = "[TEKAN 'R' SEKALI LAGI UNTUK KONFIRMASI RESET & KLAIM!]"
+				g.notificationExpiry = time.Now().Add(4 * time.Second)
+			}
+		}
+	}
+
 	// Kontrol Hotkey Manual Save/Load (Berlaku global)
 	saveFile := "savegame.json"
 	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
@@ -168,6 +204,7 @@ func (g *Game) showTabChangeNotification() {
 		1: "PENINGKATAN (UPGRADE)",
 		2: "MANAJER (OTOMATISASI)",
 		3: "PENCAPAIAN (ACHIEVEMENTS)",
+		4: "INVESTOR MALAIKAT (PRESTIGE)",
 	}[g.activeTab]
 	g.notification = fmt.Sprintf("[TAB AKTIF: %s]", tabName)
 	g.notificationExpiry = time.Now().Add(1500 * time.Millisecond)
@@ -190,7 +227,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		ebitenutil.DebugPrintAt(screen, g.notification, 320, 12)
 	}
 
-	// Gambar Tab Header (4 Tab UI)
+	// Gambar Tab Header (5 Tab UI)
 	tabs := []struct {
 		tabIdx int
 		title  string
@@ -201,10 +238,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		{1, "UPGRADE", "F2", color.RGBA{R: 166, G: 227, B: 161, A: 255}}, // Green
 		{2, "MANAGER", "F3", color.RGBA{R: 249, G: 226, B: 175, A: 255}}, // Yellow
 		{3, "ACHIEVE", "F4", color.RGBA{R: 245, G: 194, B: 231, A: 255}}, // Pink/Lavender
+		{4, "INVESTOR", "F5", color.RGBA{R: 250, G: 179, B: 135, A: 255}}, // Orange
 	}
 
 	for i, t := range tabs {
-		x := 20 + i*112
+		x := 20 + i*90
 		var bg color.RGBA
 		var txt string
 		if g.activeTab == t.tabIdx {
@@ -214,12 +252,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			bg = color.RGBA{R: 45, G: 45, B: 60, A: 255}
 			txt = fmt.Sprintf("[%s]%s", t.hotkey, t.title)
 		}
-		vector.DrawFilledRect(screen, float32(x), 50, 102, 22, bg, false)
+		vector.DrawFilledRect(screen, float32(x), 50, 84, 22, bg, false)
 		
-		ebitenutil.DebugPrintAt(screen, txt, x+5, 53)
+		// Text color contrast
+		ebitenutil.DebugPrintAt(screen, txt, x+3, 53)
 	}
 
-	ebitenutil.DebugPrintAt(screen, "(Tekan F1-F4 atau [TAB])", 475, 53)
+	ebitenutil.DebugPrintAt(screen, "(Tekan F1-F5 atau [TAB])", 475, 53)
 
 	// TAB 1: BISNIS
 	if g.activeTab == 0 {
@@ -403,6 +442,40 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 
 		ebitenutil.DebugPrintAt(screen, "Petunjuk: Pencapaian terbuka secara otomatis jika kondisi terpenuhi, memberikan bonus pendapatan permanen.", 20, 422)
+	}
+
+	// TAB 5: INVESTOR / PRESTIGE
+	if g.activeTab == 4 {
+		lifetime := g.engine.GetLifetimeEarnings()
+		angels := g.engine.GetAngels()
+		claimable := g.engine.CalculateAngelsToClaim()
+
+		// 1. Statistik Card
+		vector.DrawFilledRect(screen, 20, 88, 600, 110, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		ebitenutil.DebugPrintAt(screen, "STATISTIK SEPANJANG MASA (LIFETIME STATS):", 35, 98)
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Total Akumulasi Pendapatan : %.2f Poin", lifetime), 35, 120)
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Angel Investors Dimiliki  : %d Investor", angels), 35, 142)
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Bonus Pengali Pendapatan  : +%d%% Pendapatan (Global)", angels*5), 35, 164)
+
+		// 2. Prestige Card
+		vector.DrawFilledRect(screen, 20, 218, 600, 130, color.RGBA{R: 45, G: 45, B: 60, A: 255}, false)
+		ebitenutil.DebugPrintAt(screen, "RESET PRESTIS (INVESTASI MALAIKAT):", 35, 228)
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Investor Baru untuk Diklaim : +%d Investor", claimable), 35, 250)
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(" - Efek Bonus Setelah Klaim    : +%d%% Pendapatan (Global)", (angels+claimable)*5), 35, 272)
+
+		var prestigeText string
+		if claimable <= 0 {
+			prestigeText = "Tindakan: Belum ada investor baru untuk diklaim (Minimal 100 Poin sepanjang masa)."
+		} else if g.prestigeConfirm {
+			prestigeText = "[TEKAN 'R' SEKALI LAGI UNTUK KONFIRMASI RESET & KLAIM!]"
+		} else {
+			prestigeText = "Tindakan: Tekan [R] untuk memicu reset progres & klaim investor baru."
+		}
+		ebitenutil.DebugPrintAt(screen, prestigeText, 35, 305)
+
+		// Keterangan
+		ebitenutil.DebugPrintAt(screen, "Info: Melakukan Prestige akan mereset saldo, level bisnis, upgrade, dan manajer Anda.", 20, 365)
+		ebitenutil.DebugPrintAt(screen, "Namun, Angel Investors memberikan +5% pendapatan permanen global. Pencapaian tidak direset.", 20, 385)
 	}
 
 	// Footer (Global)
