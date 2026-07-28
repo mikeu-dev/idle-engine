@@ -1,6 +1,6 @@
 package manager
 
-// Manager merepresentasikan manajer yang dapat dipekerjakan untuk otomatisasi.
+// Manager represents a manager that can be hired for automation.
 type Manager struct {
 	ID               string
 	Name             string
@@ -10,7 +10,7 @@ type Manager struct {
 	IsHired          bool
 }
 
-// NewManager membuat instance Manager baru.
+// NewManager creates a new Manager instance.
 func NewManager(id, name, desc string, cost float64, target string) *Manager {
 	return &Manager{
 		ID:               id,
@@ -22,7 +22,7 @@ func NewManager(id, name, desc string, cost float64, target string) *Manager {
 	}
 }
 
-// Hire menandai manajer telah dipekerjakan.
+// Hire marks the manager as hired.
 func (m *Manager) Hire() {
 	m.IsHired = true
 }

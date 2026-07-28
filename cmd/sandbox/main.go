@@ -11,49 +11,49 @@ import (
 )
 
 func main() {
-	// Inisialisasi logic engine
+	// Initialize logic engine
 	eng := engine.NewEngine()
 
-	// Coba muat data simpanan saat startup
+	// Try to load save data at startup
 	var offlineRevenue float64
 	saveFile := "savegame.json"
 	if _, err := os.Stat(saveFile); err == nil {
-		log.Println("Menemukan berkas savegame.json. Memuat progres...")
+		log.Println("Found savegame.json. Loading progress...")
 		state, err := save.LoadFromFile(saveFile)
 		if err != nil {
-			log.Printf("Gagal memuat berkas simpanan: %v", err)
+			log.Printf("Failed to load save file: %v", err)
 		} else {
 			offlineRevenue = eng.ImportState(state)
-			log.Printf("Progres berhasil dimuat! Pendapatan offline: %.2f Poin", offlineRevenue)
+			log.Printf("Progress loaded successfully! Offline earnings: %.2f Points", offlineRevenue)
 		}
 	} else {
-		log.Println("Berkas savegame.json tidak ditemukan. Memulai dari awal.")
+		log.Println("savegame.json not found. Starting from scratch.")
 	}
 
-	// Inisialisasi presentasi ebiten
+	// Initialize Ebitengine presentation
 	game := presentation.NewGame(eng)
 	if offlineRevenue > 0 {
 		game.SetOfflineNotification(offlineRevenue)
 	}
 
-	// Pastikan game otomatis menyimpan progres ketika keluar secara normal
+	// Ensure game automatically saves progress when exiting normally
 	defer func() {
-		log.Println("Menyimpan progres game sebelum keluar...")
+		log.Println("Saving game progress before exit...")
 		state := eng.ExportState()
 		if err := save.SaveToFile(saveFile, state); err != nil {
-			log.Printf("Gagal menyimpan progres game: %v", err)
+			log.Printf("Failed to save game progress: %v", err)
 		} else {
-			log.Println("Progres game berhasil disimpan ke savegame.json!")
+			log.Println("Game progress successfully saved to savegame.json!")
 		}
 	}()
 
-	// Setup jendela permainan
+	// Setup game window
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Idle Engine Sandbox")
 
-	log.Println("Memulai Idle Engine Sandbox...")
+	log.Println("Starting Idle Engine Sandbox...")
 
-	// Jalankan game
+	// Run game
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}

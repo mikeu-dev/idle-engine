@@ -6,7 +6,7 @@ import (
 )
 
 func TestLoadConfigSuccess(t *testing.T) {
-	// Buat berkas YAML sementara untuk testing
+	// Create temporary YAML file for testing
 	yamlContent := `
 businesses:
   - id: test_biz
@@ -52,28 +52,28 @@ achievements:
 		t.Fatal(err)
 	}
 
-	// Muat konfigurasi dari file sementara
+	// Load config from the temporary file
 	cfg, err := LoadConfig(tmpfile.Name())
 	if err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	// Verifikasi lini bisnis
+	// Verify business config
 	if len(cfg.Businesses) != 1 || cfg.Businesses[0].ID != "test_biz" || cfg.Businesses[0].BaseCost != 10.0 {
 		t.Errorf("business config parsed incorrectly: %+v", cfg.Businesses)
 	}
 
-	// Verifikasi upgrade
+	// Verify upgrade config
 	if len(cfg.Upgrades) != 1 || cfg.Upgrades[0].ID != "test_upg" || cfg.Upgrades[0].RevenueMultiplier != 2.0 {
 		t.Errorf("upgrade config parsed incorrectly: %+v", cfg.Upgrades)
 	}
 
-	// Verifikasi manager
+	// Verify manager config
 	if len(cfg.Managers) != 1 || cfg.Managers[0].ID != "test_mgr" || cfg.Managers[0].Cost != 100.0 {
 		t.Errorf("manager config parsed incorrectly: %+v", cfg.Managers)
 	}
 
-	// Verifikasi achievement
+	// Verify achievement config
 	if len(cfg.Achievements) != 1 || cfg.Achievements[0].ID != "test_ach" || cfg.Achievements[0].BonusMultiplier != 0.1 {
 		t.Errorf("achievement config parsed incorrectly: %+v", cfg.Achievements)
 	}

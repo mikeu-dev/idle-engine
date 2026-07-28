@@ -7,7 +7,7 @@ import (
 	"github.com/beevik/ntp"
 )
 
-// GetNetworkTime mengambil waktu nyata terkalibrasi dari server NTP.
+// GetNetworkTime retrieves the real calibrated time from an NTP server.
 func GetNetworkTime(server string, timeout time.Duration) (time.Time, error) {
 	resp, err := ntp.QueryWithOptions(server, ntp.QueryOptions{
 		Timeout: timeout,
@@ -15,13 +15,13 @@ func GetNetworkTime(server string, timeout time.Duration) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	// Tambahkan ClockOffset ke waktu lokal saat ini untuk mendapatkan waktu jaringan terkalibrasi
+	// Add ClockOffset to the current local time to get the calibrated network time
 	calibratedTime := time.Now().Add(resp.ClockOffset)
 	return calibratedTime, nil
 }
 
-// IsSystemTimeValid memeriksa apakah waktu lokal sistem cocok dengan waktu jaringan terpercaya.
-// Mengembalikan true jika selisihnya berada di bawah nilai toleransi.
+// IsSystemTimeValid checks if the local system time matches the trusted network time.
+// Returns true if the difference is below the tolerance threshold.
 func IsSystemTimeValid(systemTime, ntpTime time.Time, tolerance time.Duration) bool {
 	diff := systemTime.Sub(ntpTime)
 	return math.Abs(diff.Seconds()) <= tolerance.Seconds()

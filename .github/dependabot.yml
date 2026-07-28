@@ -1,12 +1,12 @@
 version: 2
 updates:
-  # Konfigurasi pembaruan mingguan untuk Go Modules (go.mod)
+  # Weekly update configuration for Go Modules (go.mod)
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
 
-  # Konfigurasi pembaruan mingguan untuk GitHub Actions (.github/workflows)
+  # Weekly update configuration for GitHub Actions (.github/workflows)
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

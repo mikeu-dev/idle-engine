@@ -16,17 +16,17 @@ import (
 	"time"
 )
 
-// RandomEvent merepresentasikan peristiwa ekonomi acak berdurasi singkat.
+// RandomEvent represents a short-duration economic random event.
 type RandomEvent struct {
 	ID          string
 	Title       string
 	Description string
-	TargetBizID string // Jika kosong (""), berarti global
-	EffectType  string // "revenue" atau "speed"
+	TargetBizID string // If empty (""), it is global
+	EffectType  string // "revenue" or "speed"
 	Multiplier  float64
 }
 
-// Engine merepresentasikan orchestrator logika utama permainan.
+// Engine represents the main game logic orchestrator.
 type Engine struct {
 	mu                      sync.RWMutex
 	wallet                  *economy.Wallet
@@ -43,10 +43,10 @@ type Engine struct {
 	lastTick                time.Time
 }
 
-// NewEngineWithConfig membuat instance Engine baru berdasarkan berkas konfigurasi YAML di cfgPath.
-// Jika file tidak dapat dibaca atau di-decode, engine akan menggunakan konfigurasi fallback bawaan agar unit test tetap kompatibel.
+// NewEngineWithConfig creates a new Engine instance based on the YAML config file at cfgPath.
+// If the file cannot be loaded or decoded, the engine uses fallback configuration for unit test compatibility.
 func NewEngineWithConfig(cfgPath string) *Engine {
-	// Buat wallet dengan modal awal 4 poin agar bisa beli Lemonade Stand segera
+	// Create wallet with initial 4 points so players can buy the Lemonade Stand immediately
 	wallet := economy.NewWallet(4.0)
 
 	var businesses []*business.Business
@@ -54,10 +54,10 @@ func NewEngineWithConfig(cfgPath string) *Engine {
 	var managers []*manager.Manager
 	var achievements []*event.Achievement
 
-	// Coba muat konfigurasi dari file
+	// Try to load configuration from file
 	cfg, err := config.LoadConfig(cfgPath)
 	if err == nil && len(cfg.Businesses) > 0 {
-		// Konfigurasi dinamis dari YAML
+		// Dynamic configuration from YAML
 		for _, bc := range cfg.Businesses {
 			duration := time.Duration(bc.DurationMs) * time.Millisecond
 			b := business.NewBusiness(bc.ID, bc.Name, bc.BaseCost, bc.CostMultiplier, bc.BaseIncome, duration, bc.IsAutomated)
@@ -97,7 +97,7 @@ func NewEngineWithConfig(cfgPath string) *Engine {
 			))
 		}
 	} else {
-		// Fallback bawaan (hardcoded) demi kompatibilitas mundur
+		// Default fallback (hardcoded) for backward compatibility
 		businesses = []*business.Business{
 			business.NewBusiness("lemonade", "Lemonade Stand", 4.0, 1.15, 1.0, 1*time.Second, false),
 			business.NewBusiness("newspaper", "Newspaper Route", 20.0, 1.15, 4.0, 3*time.Second, true),
@@ -105,19 +105,19 @@ func NewEngineWithConfig(cfgPath string) *Engine {
 		}
 
 		upgrades = []*upgrade.Upgrade{
-			upgrade.NewUpgrade("lemon_pitcher", "Lemon Pitcher", "Lemonade Stand 2x Pendapatan", 15.0, "lemonade", modifier.NewModifier(2.0, 1.0)),
-			upgrade.NewUpgrade("newspaper_bag", "Newspaper Bag", "Newspaper Route 2x Kecepatan", 50.0, "newspaper", modifier.NewModifier(1.0, 2.0)),
-			upgrade.NewUpgrade("power_washer", "Power Washer", "Car Wash 3x Pendapatan", 250.0, "carwash", modifier.NewModifier(3.0, 1.0)),
+			upgrade.NewUpgrade("lemon_pitcher", "Lemon Pitcher", "Lemonade Stand 2x Revenue", 15.0, "lemonade", modifier.NewModifier(2.0, 1.0)),
+			upgrade.NewUpgrade("newspaper_bag", "Newspaper Bag", "Newspaper Route 2x Speed", 50.0, "newspaper", modifier.NewModifier(1.0, 2.0)),
+			upgrade.NewUpgrade("power_washer", "Power Washer", "Car Wash 3x Revenue", 250.0, "carwash", modifier.NewModifier(3.0, 1.0)),
 		}
 
 		managers = []*manager.Manager{
-			manager.NewManager("lemonade_mgr", "Lemonade Manager", "Mengotomatiskan Lemonade Stand secara permanen", 100.0, "lemonade"),
+			manager.NewManager("lemonade_mgr", "Lemonade Manager", "Automates Lemonade Stand production permanently", 100.0, "lemonade"),
 		}
 
 		achievements = []*event.Achievement{
-			event.NewAchievement("pts_100", "Poin Pemula", "Kumpulkan 100 Poin (Bonus +10% pendapatan global)", "balance", "", 100.0, 0.10),
-			event.NewAchievement("lemon_10", "Lemonade Tycoon", "Lemonade Stand Level 10 (Bonus +20% pendapatan Lemonade)", "level", "lemonade", 10.0, 0.20),
-			event.NewAchievement("news_10", "Newspaper Tycoon", "Newspaper Route Level 10 (Bonus +20% pendapatan Newspaper)", "level", "newspaper", 10.0, 0.20),
+			event.NewAchievement("pts_100", "Beginner Points", "Collect 100 Points (Bonus +10% global revenue)", "balance", "", 100.0, 0.10),
+			event.NewAchievement("lemon_10", "Lemonade Tycoon", "Lemonade Stand Level 10 (Bonus +20% Lemonade revenue)", "level", "lemonade", 10.0, 0.20),
+			event.NewAchievement("news_10", "Newspaper Tycoon", "Newspaper Route Level 10 (Bonus +20% Newspaper revenue)", "level", "newspaper", 10.0, 0.20),
 		}
 	}
 
@@ -137,12 +137,12 @@ func NewEngineWithConfig(cfgPath string) *Engine {
 	}
 }
 
-// NewEngine membuat instance Engine baru dengan konfigurasi bawaan game_config.yaml.
+// NewEngine creates a new Engine instance with the default game_config.yaml configuration.
 func NewEngine() *Engine {
 	return NewEngineWithConfig("internal/infrastructure/config/game_config.yaml")
 }
 
-// Update memproses waktu yang berlalu dan memperbarui semua bisnis serta saldo wallet.
+// Update processes the elapsed time and updates all businesses and wallet balance.
 func (e *Engine) Update() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -151,22 +151,22 @@ func (e *Engine) Update() {
 	delta := now.Sub(e.lastTick)
 	e.lastTick = now
 
-	// Update sisa durasi Super Boost
+	// Update remaining Super Boost duration
 	if e.boostDuration > 0 {
 		e.boostDuration -= delta
 		if e.boostDuration <= 0 {
 			e.boostDuration = 0
-			e.applyModifiers() // Hitung ulang modifiers karena boost habis
+			e.applyModifiers() // Recalculate modifiers because boost ended
 		}
 	}
 
-	// Update sisa durasi Event Acak jika ada
+	// Update remaining Random Event duration if any
 	if e.activeEvent != nil {
 		e.eventDuration -= delta
 		if e.eventDuration <= 0 {
 			e.activeEvent = nil
 			e.eventDuration = 0
-			e.applyModifiers() // Kembalikan multiplier normal
+			e.applyModifiers() // Restore normal multipliers
 		}
 	} else {
 		e.timeSinceLastEventCheck += delta
@@ -178,79 +178,79 @@ func (e *Engine) Update() {
 		}
 	}
 
-	// Update masing-masing bisnis dan tampung pendapatan
+	// Update each business and collect revenue
 	totalRevenue := 0.0
 	for _, b := range e.businesses {
 		totalRevenue += b.Update(delta)
 	}
 
-	// Tambahkan pendapatan ke dompet dan lifetime earnings
+	// Add revenue to wallet and lifetime earnings
 	if totalRevenue > 0 {
 		e.wallet.Add(totalRevenue)
 		e.lifetimeEarnings += totalRevenue
 	}
 
-	// Periksa pencapaian baru setelah saldo berubah
+	// Check new achievements after balance changes
 	e.checkAchievements()
 }
 
-// GetWallet mengembalikan wallet dari engine.
+// GetWallet returns the engine's wallet.
 func (e *Engine) GetWallet() *economy.Wallet {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.wallet
 }
 
-// GetBusinesses mengembalikan semua bisnis yang terdaftar.
+// GetBusinesses returns all registered businesses.
 func (e *Engine) GetBusinesses() []*business.Business {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.businesses
 }
 
-// GetUpgrades mengembalikan daftar semua upgrade.
+// GetUpgrades returns all upgrade items.
 func (e *Engine) GetUpgrades() []*upgrade.Upgrade {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.upgrades
 }
 
-// GetManagers mengembalikan daftar semua manager.
+// GetManagers returns all managers.
 func (e *Engine) GetManagers() []*manager.Manager {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.managers
 }
 
-// GetAchievements mengembalikan daftar semua pencapaian.
+// GetAchievements returns all achievements.
 func (e *Engine) GetAchievements() []*event.Achievement {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.achievements
 }
 
-// GetLifetimeEarnings mengembalikan akumulasi pendapatan sepanjang masa.
+// GetLifetimeEarnings returns the cumulative lifetime earnings.
 func (e *Engine) GetLifetimeEarnings() float64 {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.lifetimeEarnings
 }
 
-// GetAngels mengembalikan jumlah Angel Investors saat ini.
+// GetAngels returns the current number of Angel Investors.
 func (e *Engine) GetAngels() int {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.angels
 }
 
-// GetBoostDuration mengembalikan sisa durasi Super Boost secara thread-safe.
+// GetBoostDuration returns the remaining Super Boost duration in a thread-safe manner.
 func (e *Engine) GetBoostDuration() time.Duration {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.boostDuration
 }
 
-// TriggerSuperBoost mengaktifkan Super Boost selama 30 detik dengan memotong biaya saldo.
+// TriggerSuperBoost activates the Super Boost for 30s by spending the cost from the wallet.
 func (e *Engine) TriggerSuperBoost() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -258,20 +258,20 @@ func (e *Engine) TriggerSuperBoost() bool {
 	cost := 50.0
 	if e.wallet.Spend(cost) {
 		e.boostDuration += 30 * time.Second
-		e.applyModifiers() // Hitung ulang kecepatan bisnis dengan booster
+		e.applyModifiers() // Recalculate business speeds with booster
 		return true
 	}
 	return false
 }
 
-// TriggerTimeWarp memberikan pendapatan instan 1 jam dengan memotong biaya saldo.
+// TriggerTimeWarp grants 1 hour of instant passive automated income by spending the cost from the wallet.
 func (e *Engine) TriggerTimeWarp() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	cost := 150.0
 	if e.wallet.Spend(cost) {
-		// Hitung total GPS dari bisnis otomatis yang dimiliki pemain saat ini
+		// Calculate total GPS of all automated businesses owned by the player
 		totalGPS := 0.0
 		for _, b := range e.businesses {
 			if b.IsOwned() && b.IsAutomated {
@@ -279,7 +279,7 @@ func (e *Engine) TriggerTimeWarp() bool {
 			}
 		}
 
-		// Instan dapatkan 1 jam pendapatan (3600 detik)
+		// Instant 1 hour of revenue (3600 seconds)
 		instantRevenue := totalGPS * 3600.0
 		if instantRevenue > 0 {
 			e.wallet.Add(instantRevenue)
@@ -291,14 +291,14 @@ func (e *Engine) TriggerTimeWarp() bool {
 	return false
 }
 
-// GetActiveEvent mengembalikan event acak aktif saat ini beserta sisa durasinya secara thread-safe.
+// GetActiveEvent returns the currently active random event and its remaining duration in a thread-safe manner.
 func (e *Engine) GetActiveEvent() (*RandomEvent, time.Duration) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.activeEvent, e.eventDuration
 }
 
-// TriggerEventByID memicu event acak tertentu berdasarkan ID secara instan untuk kebutuhan pengujian unit test.
+// TriggerEventByID triggers a specific random event instantly by its ID for unit test purposes.
 func (e *Engine) TriggerEventByID(id string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -306,32 +306,32 @@ func (e *Engine) TriggerEventByID(id string) bool {
 	events := map[string]*RandomEvent{
 		"summer": {
 			ID:          "summer",
-			Title:       "Musim Panas Terik",
-			Description: "Pendapatan Lemonade Stand naik 3x!",
+			Title:       "Hot Summer",
+			Description: "Lemonade Stand revenue 3x!",
 			TargetBizID: "lemonade",
 			EffectType:  "revenue",
 			Multiplier:  3.0,
 		},
 		"paper_day": {
 			ID:          "paper_day",
-			Title:       "Hari Loper Koran",
-			Description: "Kecepatan Newspaper Route naik 2x!",
+			Title:       "Paperboy Day",
+			Description: "Newspaper Route speed 2x!",
 			TargetBizID: "newspaper",
 			EffectType:  "speed",
 			Multiplier:  2.0,
 		},
 		"rain_storm": {
 			ID:          "rain_storm",
-			Title:       "Hujan Badai Berlumpur",
-			Description: "Pendapatan Car Wash naik 4x!",
+			Title:       "Muddy Rainstorm",
+			Description: "Car Wash revenue 4x!",
 			TargetBizID: "carwash",
 			EffectType:  "revenue",
 			Multiplier:  4.0,
 		},
 		"power_outage": {
 			ID:          "power_outage",
-			Title:       "Krisis Listrik Kota",
-			Description: "Kecepatan seluruh bisnis turun menjadi 0.5x!",
+			Title:       "City Power Outage",
+			Description: "All business speeds reduced to 0.5x!",
 			TargetBizID: "",
 			EffectType:  "speed",
 			Multiplier:  0.5,
@@ -349,38 +349,38 @@ func (e *Engine) TriggerEventByID(id string) bool {
 	return true
 }
 
-// triggerRandomEvent memicu salah satu event acak secara acak berdurasi 30 detik.
-// Catatan: Pemanggil harus menahan Lock mu.
+// triggerRandomEvent triggers one of the random events for 30s.
+// Note: Caller must hold Lock on mu.
 func (e *Engine) triggerRandomEvent() {
 	events := []*RandomEvent{
 		{
 			ID:          "summer",
-			Title:       "Musim Panas Terik",
-			Description: "Pendapatan Lemonade Stand naik 3x!",
+			Title:       "Hot Summer",
+			Description: "Lemonade Stand revenue 3x!",
 			TargetBizID: "lemonade",
 			EffectType:  "revenue",
 			Multiplier:  3.0,
 		},
 		{
 			ID:          "paper_day",
-			Title:       "Hari Loper Koran",
-			Description: "Kecepatan Newspaper Route naik 2x!",
+			Title:       "Paperboy Day",
+			Description: "Newspaper Route speed 2x!",
 			TargetBizID: "newspaper",
 			EffectType:  "speed",
 			Multiplier:  2.0,
 		},
 		{
 			ID:          "rain_storm",
-			Title:       "Hujan Badai Berlumpur",
-			Description: "Pendapatan Car Wash naik 4x!",
+			Title:       "Muddy Rainstorm",
+			Description: "Car Wash revenue 4x!",
 			TargetBizID: "carwash",
 			EffectType:  "revenue",
 			Multiplier:  4.0,
 		},
 		{
 			ID:          "power_outage",
-			Title:       "Krisis Listrik Kota",
-			Description: "Kecepatan seluruh bisnis turun menjadi 0.5x!",
+			Title:       "City Power Outage",
+			Description: "All business speeds reduced to 0.5x!",
 			TargetBizID: "",
 			EffectType:  "speed",
 			Multiplier:  0.5,
@@ -393,13 +393,12 @@ func (e *Engine) triggerRandomEvent() {
 	e.applyModifiers()
 }
 
-
-// CalculateAngelsToClaim menghitung berapa banyak investor yang bisa diperoleh jika mereset progres sekarang.
+// CalculateAngelsToClaim calculates how many angels can be claimed if prestige reset is performed now.
 func (e *Engine) CalculateAngelsToClaim() int {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	// Rumus uji coba sandbox: floor(sqrt(LifetimeEarnings / 100)) - Angels
+	// Sandbox test formula: floor(sqrt(LifetimeEarnings / 100)) - Angels
 	if e.lifetimeEarnings < 100.0 {
 		return 0
 	}
@@ -411,7 +410,7 @@ func (e *Engine) CalculateAngelsToClaim() int {
 	return claimable
 }
 
-// ClaimPrestige melakukan reset progres permainan dan mengklaim Angel Investors baru.
+// ClaimPrestige resets game progress and claims new Angel Investors.
 func (e *Engine) ClaimPrestige() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -425,13 +424,13 @@ func (e *Engine) ClaimPrestige() bool {
 		return false
 	}
 
-	// 1. Klaim investor baru
+	// 1. Claim new investors
 	e.angels += claimable
 
-	// 2. Reset Saldo Wallet
+	// 2. Reset wallet balance
 	e.wallet = economy.NewWallet(0)
 
-	// 3. Reset Level Bisnis ke tingkat awal
+	// 3. Reset business levels to initial levels
 	for _, b := range e.businesses {
 		if b.ID == "lemonade" {
 			b.LoadState(1, false, 0)
@@ -439,33 +438,33 @@ func (e *Engine) ClaimPrestige() bool {
 		} else {
 			b.LoadState(0, false, 0)
 			if b.ID == "newspaper" || b.ID == "carwash" {
-				b.SetAutomated(true) // Newspaper dan Car Wash otomatis bawaan saat level > 0
+				b.SetAutomated(true) // Newspaper and Car Wash are automated by default once level > 0
 			}
 		}
 	}
 
-	// 4. Reset status pembelian Upgrade Card
+	// 4. Reset upgrade cards purchase status
 	for _, upg := range e.upgrades {
 		upg.IsPurchased = false
 	}
 
-	// 5. Reset status perekrutan Manager
+	// 5. Reset hired managers
 	for _, m := range e.managers {
 		m.IsHired = false
 	}
 
-	// Catatan: Pencapaian (Achievements) TIDAK DIRESET agar bertahan permanen.
+	// Note: Achievements are NOT reset and persist permanently.
 
-	// 6. Hitung ulang modifiers (akan mengintegrasikan bonus pengali Angel Investors)
+	// 6. Recalculate modifiers (integrating Angel Investors global multiplier bonus)
 	e.applyModifiers()
 
-	// Reset waktu update
+	// Reset update timestamp
 	e.lastTick = time.Now()
 
 	return true
 }
 
-// BuyUpgrade membeli atau menaikkan level bisnis tertentu jika saldo mencukupi.
+// BuyUpgrade purchases or upgrades a specific business if balance is sufficient.
 func (e *Engine) BuyUpgrade(idx int) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -477,16 +476,16 @@ func (e *Engine) BuyUpgrade(idx int) bool {
 	b := e.businesses[idx]
 	cost := b.Cost()
 
-	// Coba belanjakan uang dari wallet
+	// Try to spend from wallet
 	if e.wallet.Spend(cost) {
 		b.Upgrade()
-		e.checkAchievements() // Periksa pencapaian setelah level bisnis berubah
+		e.checkAchievements() // Check achievements after business level change
 		return true
 	}
 	return false
 }
 
-// BuyUpgradeMax membeli level bisnis sebanyak mungkin (Buy Max) berdasarkan saldo yang tersedia.
+// BuyUpgradeMax purchases as many levels of a business as possible (Buy Max) based on the available balance.
 func (e *Engine) BuyUpgradeMax(idx int) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -505,13 +504,13 @@ func (e *Engine) BuyUpgradeMax(idx int) bool {
 
 	if e.wallet.Spend(cost) {
 		b.UpgradeMany(levels)
-		e.checkAchievements() // Periksa pencapaian setelah level bisnis berubah
+		e.checkAchievements() // Check achievements after business level change
 		return true
 	}
 	return false
 }
 
-// BuyUpgradeCard membeli item upgrade tertentu berdasarkan indeks jika saldo mencukupi.
+// BuyUpgradeCard purchases a specific upgrade item by its index if balance is sufficient.
 func (e *Engine) BuyUpgradeCard(idx int) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -527,14 +526,14 @@ func (e *Engine) BuyUpgradeCard(idx int) bool {
 
 	if e.wallet.Spend(upg.Cost) {
 		upg.Purchase()
-		e.applyModifiers() // Hitung ulang modifiers bisnis setelah ada upgrade baru
-		e.checkAchievements() // Periksa pencapaian
+		e.applyModifiers() // Recalculate business modifiers after new upgrade purchased
+		e.checkAchievements() // Check achievements
 		return true
 	}
 	return false
 }
 
-// BuyManager mempekerjakan manager tertentu berdasarkan indeks jika saldo mencukupi.
+// BuyManager hires a specific manager by its index if balance is sufficient.
 func (e *Engine) BuyManager(idx int) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -557,8 +556,8 @@ func (e *Engine) BuyManager(idx int) bool {
 	return false
 }
 
-// applyModifiers menghitung ulang dan menerapkan modifier dari upgrade dan achievements yang diperoleh.
-// Catatan: Pemanggil harus menahan lock mu.
+// applyModifiers recalculates and applies modifiers from upgrades and achievements.
+// Note: Caller must hold Lock on mu.
 func (e *Engine) applyModifiers() {
 	revMults := make(map[string]float64)
 	speedMults := make(map[string]float64)
@@ -568,7 +567,7 @@ func (e *Engine) applyModifiers() {
 		speedMults[b.ID] = 1.0
 	}
 
-	// 1. Terapkan upgrade aktif
+	// 1. Apply purchased upgrades
 	for _, upg := range e.upgrades {
 		if upg.IsPurchased {
 			revMults[upg.TargetBusinessID] *= upg.Effect.RevenueMultiplier
@@ -576,22 +575,22 @@ func (e *Engine) applyModifiers() {
 		}
 	}
 
-	// 2. Terapkan bonus pencapaian (Achievements) aktif
+	// 2. Apply unlocked achievements bonuses
 	for _, ach := range e.achievements {
 		if ach.IsUnlocked {
 			if ach.TargetBusinessID == "" {
-				// Bonus global
+				// Global bonus
 				for _, b := range e.businesses {
 					revMults[b.ID] *= (1.0 + ach.BonusMultiplier)
 				}
 			} else {
-				// Bonus spesifik lini bisnis
+				// Specific business line bonus
 				revMults[ach.TargetBusinessID] *= (1.0 + ach.BonusMultiplier)
 			}
 		}
 	}
 
-	// 3. Terapkan bonus Angel Investors (+5% pendapatan global per investor)
+	// 3. Apply Angel Investors bonus (+5% global revenue per investor)
 	if e.angels > 0 {
 		angelMultiplier := 1.0 + float64(e.angels)*0.05
 		for _, b := range e.businesses {
@@ -599,16 +598,17 @@ func (e *Engine) applyModifiers() {
 		}
 	}
 
-	// 4. Terapkan Super Boost (2x Kecepatan Global jika durasi > 0)
+	// 4. Apply Super Boost (2x Global Speed if active)
 	boostMult := 1.0
 	if e.boostDuration > 0 {
 		boostMult = 2.0
 	}
 
-	// 5. Terapkan Event Acak jika ada yang aktif
+	// 5. Apply active Random Event if any
 	if e.activeEvent != nil {
 		evt := e.activeEvent
-		if evt.EffectType == "revenue" {
+		switch evt.EffectType {
+		case "revenue":
 			if evt.TargetBizID == "" {
 				for _, b := range e.businesses {
 					revMults[b.ID] *= evt.Multiplier
@@ -616,7 +616,7 @@ func (e *Engine) applyModifiers() {
 			} else {
 				revMults[evt.TargetBizID] *= evt.Multiplier
 			}
-		} else if evt.EffectType == "speed" {
+		case "speed":
 			if evt.TargetBizID == "" {
 				for _, b := range e.businesses {
 					speedMults[b.ID] *= evt.Multiplier
@@ -627,14 +627,14 @@ func (e *Engine) applyModifiers() {
 		}
 	}
 
-	// Terapkan ke masing-masing bisnis
+	// Apply to each business
 	for _, b := range e.businesses {
 		b.SetModifiers(revMults[b.ID], speedMults[b.ID]*boostMult)
 	}
 }
 
-// applyAutomation menerapkan otomatisasi berdasarkan manager yang disewa.
-// Catatan: Pemanggil harus menahan lock mu.
+// applyAutomation applies automation based on hired managers.
+// Note: Caller must hold Lock on mu.
 func (e *Engine) applyAutomation() {
 	for _, m := range e.managers {
 		if m.IsHired {
@@ -647,8 +647,8 @@ func (e *Engine) applyAutomation() {
 	}
 }
 
-// checkAchievements memeriksa kondisi pencapaian dan mengaktifkan bonus jika terpenuhi.
-// Catatan: Pemanggil harus menahan lock mu.
+// checkAchievements checks achievement conditions and unlocks them if met.
+// Note: Caller must hold Lock on mu.
 func (e *Engine) checkAchievements() {
 	businessLevels := make(map[string]int)
 	for _, b := range e.businesses {
@@ -670,7 +670,7 @@ func (e *Engine) checkAchievements() {
 	}
 }
 
-// TriggerProduction memicu manual start produksi untuk bisnis non-otomatis.
+// TriggerProduction triggers a manual production start for non-automated businesses.
 func (e *Engine) TriggerProduction(idx int) bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -682,7 +682,7 @@ func (e *Engine) TriggerProduction(idx int) bool {
 	return e.businesses[idx].StartProduction()
 }
 
-// ExportState mengekspor state engine saat ini ke dalam bentuk SaveState.
+// ExportState exports the current engine state to a SaveState structure.
 func (e *Engine) ExportState() *save.SaveState {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -731,16 +731,16 @@ func (e *Engine) ExportState() *save.SaveState {
 	}
 }
 
-// ImportState memuat state penyimpanan ke dalam engine dan menghitung pendapatan offline dengan proteksi NTP anti-cheat.
-// Mengembalikan total pendapatan offline yang berhasil dikumpulkan (maksimal 12 jam offline).
+// ImportState loads the save state into the engine and calculates offline earnings with NTP anti-cheat protection.
+// Returns the total offline earnings gathered (capped at 12 hours offline).
 func (e *Engine) ImportState(state *save.SaveState) float64 {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	// 1. Pulihkan saldo wallet
+	// 1. Restore wallet balance
 	e.wallet = economy.NewWallet(state.Balance)
 
-	// 2. Pulihkan state bisnis
+	// 2. Restore businesses state
 	bizStateMap := make(map[string]save.BizState)
 	for _, bs := range state.Businesses {
 		bizStateMap[bs.ID] = bs
@@ -752,7 +752,7 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 		}
 	}
 
-	// 3. Pulihkan state upgrade
+	// 3. Restore upgrades state
 	purchasedUpgMap := make(map[string]bool)
 	for _, id := range state.Upgrades {
 		purchasedUpgMap[id] = true
@@ -761,7 +761,7 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 		upg.IsPurchased = purchasedUpgMap[upg.ID]
 	}
 
-	// 4. Pulihkan state manager
+	// 4. Restore managers state
 	hiredMgrMap := make(map[string]bool)
 	for _, id := range state.Managers {
 		hiredMgrMap[id] = true
@@ -771,7 +771,7 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 	}
 	e.applyAutomation()
 
-	// 5. Pulihkan state achievement
+	// 5. Restore achievements state
 	unlockedAchMap := make(map[string]bool)
 	for _, id := range state.Achievements {
 		unlockedAchMap[id] = true
@@ -780,7 +780,7 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 		ach.IsUnlocked = unlockedAchMap[ach.ID]
 	}
 
-	// 6. Pulihkan total pendapatan dan investor (backward compatible)
+	// 6. Restore lifetime earnings and investors (backward compatible)
 	e.lifetimeEarnings = state.LifetimeEarnings
 	if e.lifetimeEarnings < e.wallet.Balance() {
 		e.lifetimeEarnings = e.wallet.Balance()
@@ -788,30 +788,30 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 	e.angels = state.Angels
 	e.boostDuration = time.Duration(state.BoostDurationNs)
 
-	// 7. Hitung ulang modifiers
+	// 7. Recalculate modifiers
 	e.applyModifiers()
 
-	// 8. Hitung pendapatan offline (maksimal 12 jam) dengan proteksi anti-cheat
+	// 8. Calculate offline earnings (max 12 hours) with anti-cheat protection
 	now := time.Now()
 	offlineDuration := now.Sub(state.Timestamp)
 
-	// Proteksi 1: Gunakan NTP jika terhubung
+	// Protection 1: Use NTP if connected
 	ntpTime, ntpErr := gametime.GetNetworkTime("pool.ntp.org", 1500*time.Millisecond)
 	if ntpErr == nil {
-		// Validasi apakah waktu lokal akurat (toleransi 5 menit)
+		// Validate if local time is accurate (5 minutes tolerance)
 		isLocalValid := gametime.IsSystemTimeValid(now, ntpTime, 5*time.Minute)
 		if !isLocalValid {
-			// Jam lokal diubah secara tidak akurat/manipulatif, paksa gunakan selisih NTP tepercaya!
+			// Local clock is manipulated, force use trusted NTP clock diff!
 			offlineDuration = ntpTime.Sub(state.Timestamp)
 		}
 
-		// Validasi apakah waktu NTP berada sebelum waktu simpan terakhir (cheat jam dimundurkan)
+		// Validate if NTP time is before the last saved timestamp (clock rewind cheat)
 		if ntpTime.Before(state.Timestamp) {
 			offlineDuration = 0
 		}
 	} else {
-		// Offline fallback ke waktu lokal
-		// Proteksi 2: Deteksi jika waktu lokal dimundurkan ke belakang waktu simpan terakhir
+		// Offline fallback to local time
+		// Protection 2: Detect if local clock was rewound behind the last saved timestamp
 		if now.Before(state.Timestamp) {
 			offlineDuration = 0
 		}
@@ -833,13 +833,13 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 		e.wallet.Add(offlineRevenue)
 	}
 
-	// Reset lastTick ke waktu sekarang agar tidak mendobel durasi offline pada update frame berikutnya
+	// Reset lastTick to current time so offline duration is not processed twice
 	e.lastTick = now
 
 	return offlineRevenue
 }
 
-// GetTotalGPS mengembalikan total pendapatan per detik dari seluruh bisnis otomatis yang dimiliki pemain.
+// GetTotalGPS returns the total gain per second (GPS) from all automated businesses owned by the player.
 func (e *Engine) GetTotalGPS() float64 {
 	e.mu.RLock()
 	defer e.mu.RUnlock()

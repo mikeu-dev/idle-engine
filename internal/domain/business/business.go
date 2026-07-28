@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Business merepresentasikan entitas lini bisnis penghasil uang.
+// Business represents a money-producing business line entity.
 type Business struct {
 	mu                sync.RWMutex
 	ID                string
@@ -23,12 +23,12 @@ type Business struct {
 	speedMultiplier   float64
 }
 
-// NewBusiness membuat instance Business baru.
+// NewBusiness creates a new Business instance.
 func NewBusiness(id, name string, baseCost, costMultiplier, baseIncome float64, duration time.Duration, isAutomated bool) *Business {
 	return &Business{
 		ID:                id,
 		Name:              name,
-		Level:             0, // Level awal 0 (belum dibeli)
+		Level:             0, // Level 0 initially (unpurchased)
 		BaseCost:          baseCost,
 		CostMultiplier:    costMultiplier,
 		BaseIncome:        baseIncome,
@@ -39,34 +39,34 @@ func NewBusiness(id, name string, baseCost, costMultiplier, baseIncome float64, 
 	}
 }
 
-// Cost mengembalikan biaya untuk membeli atau meng-upgrade bisnis ke level berikutnya.
+// Cost returns the price to buy or upgrade the business to the next level.
 func (b *Business) Cost() float64 {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.BaseCost * math.Pow(b.CostMultiplier, float64(b.Level))
 }
 
-// Income mengembalikan pendapatan teoritis per siklus untuk level saat ini dengan memperhitungkan multiplier.
+// Income returns the theoretical revenue per cycle for the current level including multipliers.
 func (b *Business) Income() float64 {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.BaseIncome * float64(b.Level) * b.revenueMultiplier
 }
 
-// Upgrade meningkatkan level bisnis.
+// Upgrade increases the business level.
 func (b *Business) Upgrade() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.Level++
 	
-	// Jika otomatis dan baru dibeli pertama kali, langsung aktifkan produksi
+	// If automated and purchased for the first time, start production immediately
 	if b.Level == 1 && b.IsAutomated {
 		b.IsActive = true
 		b.Progress = 0
 	}
 }
 
-// UpgradeMany meningkatkan level bisnis sebanyak beberapa tingkatan sekaligus.
+// UpgradeMany increases the business level by multiple levels at once.
 func (b *Business) UpgradeMany(levels int) {
 	if levels <= 0 {
 		return
@@ -77,14 +77,14 @@ func (b *Business) UpgradeMany(levels int) {
 	hadZeroLevel := (b.Level == 0)
 	b.Level += levels
 	
-	// Jika otomatis dan baru dibeli pertama kali, langsung aktifkan produksi
+	// If automated and purchased for the first time, start production immediately
 	if hadZeroLevel && b.Level >= 1 && b.IsAutomated {
 		b.IsActive = true
 		b.Progress = 0
 	}
 }
 
-// StartProduction memulai siklus produksi untuk bisnis manual.
+// StartProduction starts the production cycle for a manual business.
 func (b *Business) StartProduction() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -97,13 +97,13 @@ func (b *Business) StartProduction() bool {
 	return false
 }
 
-// Update memajukan siklus waktu bisnis berdasarkan delta durasi.
-// Mengembalikan jumlah total pendapatan yang dihasilkan selama delta waktu tersebut.
+// Update advances the business cycle time by the delta duration.
+// Returns the total revenue generated during this time delta.
 func (b *Business) Update(delta time.Duration) float64 {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// Jika belum dibeli atau tidak aktif berproduksi, tidak menghasilkan apa-apa
+	// If unowned or inactive, no revenue is generated
 	if b.Level == 0 || !b.IsActive {
 		return 0
 	}
@@ -111,7 +111,7 @@ func (b *Business) Update(delta time.Duration) float64 {
 	revenue := 0.0
 	b.Progress += delta
 
-	// Hitung durasi aktif berdasarkan speedMultiplier dan milestone speedup
+	// Calculate active duration based on speedMultiplier and milestone speedup
 	speedMultiplierTotal := b.speedMultiplier * b.getMilestoneSpeedMultiplier()
 	activeDuration := b.Duration
 	if speedMultiplierTotal > 0 {
@@ -124,14 +124,14 @@ func (b *Business) Update(delta time.Duration) float64 {
 	incomePerCycle := b.BaseIncome * float64(b.Level) * b.revenueMultiplier
 
 	if b.IsAutomated {
-		// Untuk bisnis otomatis, kumpulkan pendapatan berulang secara efisien (O(1)) jika delta waktu besar
+		// For automated business, efficiently collect repeating cycles (O(1)) for large deltas
 		numCycles := int64(b.Progress / activeDuration)
 		if numCycles > 0 {
 			revenue += incomePerCycle * float64(numCycles)
 			b.Progress %= activeDuration
 		}
 	} else {
-		// Untuk bisnis manual, selesaikan maksimal satu siklus dan matikan aktivitas
+		// For manual business, complete at most one cycle and deactivate
 		if b.Progress >= activeDuration {
 			revenue = incomePerCycle
 			b.Progress = 0
@@ -142,7 +142,7 @@ func (b *Business) Update(delta time.Duration) float64 {
 	return revenue
 }
 
-// GetProgressPercent mengembalikan persentase proses produksi (0.0 hingga 1.0).
+// GetProgressPercent returns the production progress percentage (0.0 to 1.0).
 func (b *Business) GetProgressPercent() float64 {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -166,7 +166,7 @@ func (b *Business) GetProgressPercent() float64 {
 	return pct
 }
 
-// SetModifiers memperbarui nilai pengali pendapatan dan kecepatan secara thread-safe.
+// SetModifiers updates revenue and speed multipliers in a thread-safe manner.
 func (b *Business) SetModifiers(revMult, speedMult float64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -180,28 +180,28 @@ func (b *Business) SetModifiers(revMult, speedMult float64) {
 	b.speedMultiplier = speedMult
 }
 
-// GetLevel mengembalikan level saat ini.
+// GetLevel returns the current level.
 func (b *Business) GetLevel() int {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.Level
 }
 
-// IsOwned memeriksa apakah bisnis ini sudah dibeli (level > 0).
+// IsOwned checks if the business is purchased (level > 0).
 func (b *Business) IsOwned() bool {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.Level > 0
 }
 
-// GetIsActive memeriksa apakah bisnis sedang berproduksi.
+// GetIsActive checks if the business is currently producing.
 func (b *Business) GetIsActive() bool {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.IsActive
 }
 
-// LoadState memuat state penyimpanan ke dalam bisnis secara thread-safe.
+// LoadState loads save state data into the business in a thread-safe manner.
 func (b *Business) LoadState(level int, isActive bool, progress time.Duration) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -210,26 +210,26 @@ func (b *Business) LoadState(level int, isActive bool, progress time.Duration) {
 	b.Progress = progress
 }
 
-// GetProgress mengembalikan progres waktu saat ini secara thread-safe.
+// GetProgress returns the current elapsed progress duration in a thread-safe manner.
 func (b *Business) GetProgress() time.Duration {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.Progress
 }
 
-// SetAutomated mengubah status otomatisasi bisnis secara thread-safe.
+// SetAutomated changes the business automation state in a thread-safe manner.
 func (b *Business) SetAutomated(automated bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.IsAutomated = automated
-	// Jika status diubah menjadi otomatis dan level > 0, langsung jalankan produksi
+	// If automated and level > 0, activate production immediately
 	if b.IsAutomated && b.Level > 0 && !b.IsActive {
 		b.IsActive = true
 		b.Progress = 0
 	}
 }
 
-// GetGPS mengembalikan proyeksi pendapatan per detik (GPS) dari bisnis ini dengan memperhitungkan akselerasi milestone.
+// GetGPS returns the gain per second (GPS) projection for this business including milestone speedups.
 func (b *Business) GetGPS() float64 {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -247,9 +247,9 @@ func (b *Business) GetGPS() float64 {
 	return (b.BaseIncome * float64(b.Level) * b.revenueMultiplier) / activeDuration.Seconds()
 }
 
-// getMilestoneSpeedMultiplier menghitung multiplier kecepatan tambahan dari pencapaian milestone level.
-// Setiap milestone yang dicapai mengalikan kecepatan produksi dengan 2.
-// Catatan: Pemanggil harus menahan RLock atau Lock pada b.mu.
+// getMilestoneSpeedMultiplier calculates speed multiplier bonuses from level milestones.
+// Each reached milestone doubles production speed.
+// Note: Caller must hold RLock or Lock on b.mu.
 func (b *Business) getMilestoneSpeedMultiplier() float64 {
 	milestones := []int{25, 50, 100, 250, 500, 1000, 2500, 5000}
 	mult := 1.0
@@ -261,7 +261,7 @@ func (b *Business) getMilestoneSpeedMultiplier() float64 {
 	return mult
 }
 
-// GetNextMilestone mengembalikan target level milestone berikutnya berdasarkan level saat ini secara thread-safe.
+// GetNextMilestone returns the next target milestone level based on current level in a thread-safe manner.
 func (b *Business) GetNextMilestone() int {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -271,7 +271,7 @@ func (b *Business) GetNextMilestone() int {
 			return m
 		}
 	}
-	// Jika level melebihi milestone terbesar, target berikutnya kelipatan 5000
+	// If exceeding the largest milestone, target the next multiple of 5000
 	return ((b.Level / 5000) + 1) * 5000
 }
 

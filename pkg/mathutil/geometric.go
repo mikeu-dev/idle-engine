@@ -2,8 +2,8 @@ package mathutil
 
 import "math"
 
-// CalculateMaxLevelsAffordable menghitung jumlah level maksimal yang bisa dibeli dengan saldo tertentu (balance).
-// Mengembalikan jumlah level yang bisa dibeli dan total biaya yang dibutuhkan.
+// CalculateMaxLevelsAffordable calculates the maximum upgrade levels that can be purchased with the given balance.
+// Returns the number of purchasable levels and the total cost required.
 func CalculateMaxLevelsAffordable(baseCost, multiplier float64, currentLevel int, balance float64) (int, float64) {
 	costNext := baseCost * math.Pow(multiplier, float64(currentLevel))
 	if balance < costNext {
@@ -14,7 +14,7 @@ func CalculateMaxLevelsAffordable(baseCost, multiplier float64, currentLevel int
 	if math.Abs(multiplier-1.0) < 1e-9 {
 		n = math.Floor(balance / costNext)
 	} else {
-		// Menggunakan rumus logaritma deret geometri
+		// Use logarithmic closed-form formula for geometric series
 		n = math.Floor(math.Log(1.0+(balance*(multiplier-1.0))/costNext) / math.Log(multiplier))
 	}
 
@@ -23,7 +23,7 @@ func CalculateMaxLevelsAffordable(baseCost, multiplier float64, currentLevel int
 		levels = 0
 	}
 
-	// Hitung total biaya yang sebenarnya
+	// Calculate the exact total cost
 	var totalCost float64
 	if math.Abs(multiplier-1.0) < 1e-9 {
 		totalCost = costNext * float64(levels)
