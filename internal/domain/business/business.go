@@ -90,10 +90,11 @@ func (b *Business) Update(delta time.Duration) float64 {
 	b.Progress += delta
 
 	if b.IsAutomated {
-		// Untuk bisnis otomatis, kumpulkan pendapatan berulang jika delta waktu besar
-		for b.Progress >= b.Duration {
-			b.Progress -= b.Duration
-			revenue += b.BaseIncome * float64(b.Level)
+		// Untuk bisnis otomatis, kumpulkan pendapatan berulang secara efisien (O(1)) jika delta waktu besar
+		numCycles := int64(b.Progress / b.Duration)
+		if numCycles > 0 {
+			revenue += b.BaseIncome * float64(b.Level) * float64(numCycles)
+			b.Progress %= b.Duration
 		}
 	} else {
 		// Untuk bisnis manual, selesaikan maksimal satu siklus dan matikan aktivitas
@@ -141,4 +142,20 @@ func (b *Business) GetIsActive() bool {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.IsActive
+}
+
+// LoadState memuat state penyimpanan ke dalam bisnis secara thread-safe.
+func (b *Business) LoadState(level int, isActive bool, progress time.Duration) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.Level = level
+	b.IsActive = isActive
+	b.Progress = progress
+}
+
+// GetProgress mengembalikan progres waktu saat ini secara thread-safe.
+func (b *Business) GetProgress() time.Duration {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.Progress
 }
