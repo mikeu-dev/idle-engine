@@ -607,7 +607,8 @@ func (e *Engine) applyModifiers() {
 	// 5. Apply active Random Event if any
 	if e.activeEvent != nil {
 		evt := e.activeEvent
-		if evt.EffectType == "revenue" {
+		switch evt.EffectType {
+		case "revenue":
 			if evt.TargetBizID == "" {
 				for _, b := range e.businesses {
 					revMults[b.ID] *= evt.Multiplier
@@ -615,7 +616,7 @@ func (e *Engine) applyModifiers() {
 			} else {
 				revMults[evt.TargetBizID] *= evt.Multiplier
 			}
-		} else if evt.EffectType == "speed" {
+		case "speed":
 			if evt.TargetBizID == "" {
 				for _, b := range e.businesses {
 					speedMults[b.ID] *= evt.Multiplier
