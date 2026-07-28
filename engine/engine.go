@@ -8,19 +8,22 @@ import (
 	"idle-engine/internal/domain/manager"
 	"idle-engine/internal/domain/modifier"
 	"idle-engine/internal/domain/upgrade"
+	"math"
 	"sync"
 	"time"
 )
 
 // Engine merepresentasikan orchestrator logika utama permainan.
 type Engine struct {
-	mu           sync.RWMutex
-	wallet       *economy.Wallet
-	businesses   []*business.Business
-	upgrades     []*upgrade.Upgrade
-	managers     []*manager.Manager
-	achievements []*event.Achievement
-	lastTick     time.Time
+	mu               sync.RWMutex
+	wallet           *economy.Wallet
+	businesses       []*business.Business
+	upgrades         []*upgrade.Upgrade
+	managers         []*manager.Manager
+	achievements     []*event.Achievement
+	lifetimeEarnings float64
+	angels           int
+	lastTick         time.Time
 }
 
 // NewEngine membuat instance Engine baru dengan setup bisnis awal, upgrade, manager, dan achievement.
@@ -58,12 +61,14 @@ func NewEngine() *Engine {
 	}
 
 	return &Engine{
-		wallet:       wallet,
-		businesses:   businesses,
-		upgrades:     upgrades,
-		managers:     managers,
-		achievements: achievements,
-		lastTick:     time.Now(),
+		wallet:           wallet,
+		businesses:       businesses,
+		upgrades:         upgrades,
+		managers:         managers,
+		achievements:     achievements,
+		lifetimeEarnings: 4.0, // Modal awal dihitung ke lifetime
+		angels:           0,
+		lastTick:         time.Now(),
 	}
 }
 
@@ -82,9 +87,10 @@ func (e *Engine) Update() {
 		totalRevenue += b.Update(delta)
 	}
 
-	// Tambahkan pendapatan ke dompet
+	// Tambahkan pendapatan ke dompet dan lifetime earnings
 	if totalRevenue > 0 {
 		e.wallet.Add(totalRevenue)
+		e.lifetimeEarnings += totalRevenue
 	}
 
 	// Periksa pencapaian baru setelah saldo berubah
@@ -124,6 +130,91 @@ func (e *Engine) GetAchievements() []*event.Achievement {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.achievements
+}
+
+// GetLifetimeEarnings mengembalikan akumulasi pendapatan sepanjang masa.
+func (e *Engine) GetLifetimeEarnings() float64 {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.lifetimeEarnings
+}
+
+// GetAngels mengembalikan jumlah Angel Investors saat ini.
+func (e *Engine) GetAngels() int {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.angels
+}
+
+// CalculateAngelsToClaim menghitung berapa banyak investor yang bisa diperoleh jika mereset progres sekarang.
+func (e *Engine) CalculateAngelsToClaim() int {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	// Rumus uji coba sandbox: floor(sqrt(LifetimeEarnings / 100)) - Angels
+	if e.lifetimeEarnings < 100.0 {
+		return 0
+	}
+	totalAngels := int(math.Floor(math.Sqrt(e.lifetimeEarnings / 100.0)))
+	claimable := totalAngels - e.angels
+	if claimable < 0 {
+		return 0
+	}
+	return claimable
+}
+
+// ClaimPrestige melakukan reset progres permainan dan mengklaim Angel Investors baru.
+func (e *Engine) ClaimPrestige() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.lifetimeEarnings < 100.0 {
+		return false
+	}
+	totalAngels := int(math.Floor(math.Sqrt(e.lifetimeEarnings / 100.0)))
+	claimable := totalAngels - e.angels
+	if claimable <= 0 {
+		return false
+	}
+
+	// 1. Klaim investor baru
+	e.angels += claimable
+
+	// 2. Reset Saldo Wallet
+	e.wallet = economy.NewWallet(0)
+
+	// 3. Reset Level Bisnis ke tingkat awal
+	for _, b := range e.businesses {
+		if b.ID == "lemonade" {
+			b.LoadState(1, false, 0)
+			b.SetAutomated(false)
+		} else {
+			b.LoadState(0, false, 0)
+			if b.ID == "newspaper" || b.ID == "carwash" {
+				b.SetAutomated(true) // Newspaper dan Car Wash otomatis bawaan saat level > 0
+			}
+		}
+	}
+
+	// 4. Reset status pembelian Upgrade Card
+	for _, upg := range e.upgrades {
+		upg.IsPurchased = false
+	}
+
+	// 5. Reset status perekrutan Manager
+	for _, m := range e.managers {
+		m.IsHired = false
+	}
+
+	// Catatan: Pencapaian (Achievements) TIDAK DIRESET agar bertahan permanen.
+
+	// 6. Hitung ulang modifiers (akan mengintegrasikan bonus pengali Angel Investors)
+	e.applyModifiers()
+
+	// Reset waktu update
+	e.lastTick = time.Now()
+
+	return true
 }
 
 // BuyUpgrade membeli atau menaikkan level bisnis tertentu jika saldo mencukupi.
@@ -227,6 +318,14 @@ func (e *Engine) applyModifiers() {
 		}
 	}
 
+	// 3. Terapkan bonus Angel Investors (+5% pendapatan global per investor)
+	if e.angels > 0 {
+		angelMultiplier := 1.0 + float64(e.angels)*0.05
+		for _, b := range e.businesses {
+			revMults[b.ID] *= angelMultiplier
+		}
+	}
+
 	// Terapkan ke masing-masing bisnis
 	for _, b := range e.businesses {
 		b.SetModifiers(revMults[b.ID], speedMults[b.ID])
@@ -319,12 +418,14 @@ func (e *Engine) ExportState() *save.SaveState {
 	}
 
 	return &save.SaveState{
-		Balance:      e.wallet.Balance(),
-		Businesses:   bizStates,
-		Upgrades:     purchasedUpgrades,
-		Managers:     hiredManagers,
-		Achievements: unlockedAchievements,
-		Timestamp:    time.Now(),
+		Balance:          e.wallet.Balance(),
+		Businesses:       bizStates,
+		Upgrades:         purchasedUpgrades,
+		Managers:         hiredManagers,
+		Achievements:     unlockedAchievements,
+		LifetimeEarnings: e.lifetimeEarnings,
+		Angels:           e.angels,
+		Timestamp:        time.Now(),
 	}
 }
 
@@ -377,10 +478,17 @@ func (e *Engine) ImportState(state *save.SaveState) float64 {
 		ach.IsUnlocked = unlockedAchMap[ach.ID]
 	}
 
-	// 6. Hitung ulang modifiers
+	// 6. Pulihkan total pendapatan dan investor (backward compatible)
+	e.lifetimeEarnings = state.LifetimeEarnings
+	if e.lifetimeEarnings < e.wallet.Balance() {
+		e.lifetimeEarnings = e.wallet.Balance()
+	}
+	e.angels = state.Angels
+
+	// 7. Hitung ulang modifiers
 	e.applyModifiers()
 
-	// 7. Hitung pendapatan offline (maksimal 12 jam)
+	// 8. Hitung pendapatan offline (maksimal 12 jam)
 	now := time.Now()
 	offlineDuration := now.Sub(state.Timestamp)
 
