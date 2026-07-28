@@ -8,30 +8,34 @@ import (
 
 // Business merepresentasikan entitas lini bisnis penghasil uang.
 type Business struct {
-	mu             sync.RWMutex
-	ID             string
-	Name           string
-	Level          int
-	BaseCost       float64
-	CostMultiplier float64
-	BaseIncome     float64
-	Duration       time.Duration
-	Progress       time.Duration
-	IsAutomated    bool
-	IsActive       bool
+	mu                sync.RWMutex
+	ID                string
+	Name              string
+	Level             int
+	BaseCost          float64
+	CostMultiplier    float64
+	BaseIncome        float64
+	Duration          time.Duration
+	Progress          time.Duration
+	IsAutomated       bool
+	IsActive          bool
+	revenueMultiplier float64
+	speedMultiplier   float64
 }
 
 // NewBusiness membuat instance Business baru.
 func NewBusiness(id, name string, baseCost, costMultiplier, baseIncome float64, duration time.Duration, isAutomated bool) *Business {
 	return &Business{
-		ID:             id,
-		Name:           name,
-		Level:          0, // Level awal 0 (belum dibeli)
-		BaseCost:       baseCost,
-		CostMultiplier: costMultiplier,
-		BaseIncome:     baseIncome,
-		Duration:       duration,
-		IsAutomated:    isAutomated,
+		ID:                id,
+		Name:              name,
+		Level:             0, // Level awal 0 (belum dibeli)
+		BaseCost:          baseCost,
+		CostMultiplier:    costMultiplier,
+		BaseIncome:        baseIncome,
+		Duration:          duration,
+		IsAutomated:       isAutomated,
+		revenueMultiplier: 1.0,
+		speedMultiplier:   1.0,
 	}
 }
 
@@ -42,11 +46,11 @@ func (b *Business) Cost() float64 {
 	return b.BaseCost * math.Pow(b.CostMultiplier, float64(b.Level))
 }
 
-// Income mengembalikan pendapatan teoritis per siklus untuk level saat ini.
+// Income mengembalikan pendapatan teoritis per siklus untuk level saat ini dengan memperhitungkan multiplier.
 func (b *Business) Income() float64 {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	return b.BaseIncome * float64(b.Level)
+	return b.BaseIncome * float64(b.Level) * b.revenueMultiplier
 }
 
 // Upgrade meningkatkan level bisnis.
@@ -89,17 +93,28 @@ func (b *Business) Update(delta time.Duration) float64 {
 	revenue := 0.0
 	b.Progress += delta
 
+	// Hitung durasi aktif berdasarkan speedMultiplier
+	activeDuration := b.Duration
+	if b.speedMultiplier > 0 {
+		activeDuration = time.Duration(float64(b.Duration) / b.speedMultiplier)
+	}
+	if activeDuration == 0 {
+		activeDuration = time.Nanosecond
+	}
+
+	incomePerCycle := b.BaseIncome * float64(b.Level) * b.revenueMultiplier
+
 	if b.IsAutomated {
 		// Untuk bisnis otomatis, kumpulkan pendapatan berulang secara efisien (O(1)) jika delta waktu besar
-		numCycles := int64(b.Progress / b.Duration)
+		numCycles := int64(b.Progress / activeDuration)
 		if numCycles > 0 {
-			revenue += b.BaseIncome * float64(b.Level) * float64(numCycles)
-			b.Progress %= b.Duration
+			revenue += incomePerCycle * float64(numCycles)
+			b.Progress %= activeDuration
 		}
 	} else {
 		// Untuk bisnis manual, selesaikan maksimal satu siklus dan matikan aktivitas
-		if b.Progress >= b.Duration {
-			revenue = b.BaseIncome * float64(b.Level)
+		if b.Progress >= activeDuration {
+			revenue = incomePerCycle
 			b.Progress = 0
 			b.IsActive = false
 		}
@@ -116,11 +131,34 @@ func (b *Business) GetProgressPercent() float64 {
 	if b.Duration == 0 || !b.IsActive {
 		return 0
 	}
-	pct := float64(b.Progress) / float64(b.Duration)
+
+	activeDuration := b.Duration
+	if b.speedMultiplier > 0 {
+		activeDuration = time.Duration(float64(b.Duration) / b.speedMultiplier)
+	}
+	if activeDuration == 0 {
+		return 0
+	}
+
+	pct := float64(b.Progress) / float64(activeDuration)
 	if pct > 1.0 {
 		return 1.0
 	}
 	return pct
+}
+
+// SetModifiers memperbarui nilai pengali pendapatan dan kecepatan secara thread-safe.
+func (b *Business) SetModifiers(revMult, speedMult float64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if revMult <= 0 {
+		revMult = 1.0
+	}
+	if speedMult <= 0 {
+		speedMult = 1.0
+	}
+	b.revenueMultiplier = revMult
+	b.speedMultiplier = speedMult
 }
 
 // GetLevel mengembalikan level saat ini.
@@ -159,3 +197,4 @@ func (b *Business) GetProgress() time.Duration {
 	defer b.mu.RUnlock()
 	return b.Progress
 }
+
